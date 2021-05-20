@@ -29,8 +29,8 @@ params.out         = "Analysis_Results-${date}"
 params.debug       = null
 params.species     = "elegans"
 params.wbb         = "WS276"
-params.data_dir    = "input_data/${params.species}"
-params.numeric_chrom = "input_data/all_species/rename_chromosomes"
+params.data_dir    = "${workflow.projectDir}/input_data/${params.species}"
+params.numeric_chrom = "${workflow.projectDir}/input_data/all_species/rename_chromosomes"
 params.sparse_cut  = 0.01
 params.group_qtl   = 1000
 params.ci_size     = 150
@@ -38,22 +38,7 @@ params.sthresh     = "BF"
 params.p3d         = "TRUE"
 params.maf         = 0.05
 
-if(params.debug) {
-    println """
 
-        *** Using debug mode ***
-
-    """
-    // debug for now with small vcf
-    params.vcf = "330_TEST.vcf.gz"
-    vcf = Channel.fromPath("${workflow.projectDir}/test_data/330_TEST.vcf.gz")
-    vcf_index = Channel.fromPath("${workflow.projectDir}/test_data/330_TEST.vcf.gz.tbi")
-    params.traitfile = "${workflow.projectDir}/test_data/example_trait.tsv"
-} else { // does this work with gcp config? which takes preference?
-    vcf = Channel.fromPath("/projects/b1059/analysis/WI-${params.vcf}/isotype_only/WI.${params.vcf}.hard-filter.isotype.vcf.gz")
-    vcf_index = Channel.fromPath("/projects/b1059/analysis/WI-${params.vcf}/isotype_only/WI.${params.vcf}.hard-filter.isotype.vcf.gz.tbi")
-    impute_vcf = Channel.fromPath("/projects/b1059/analysis/WI-${params.vcf}/imputed/WI.${params.vcf}.impute.isotype.vcf.gz")
-}
 
 if(params.debug) {
     println """
@@ -282,7 +267,6 @@ workflow {
         peaks
             .spread(traits_to_map)
             .combine(divergent_and_haplotype.out.div_done)
-            //.combine(gcta_fine_maps.out.finemap_done) | html_report_main
             .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true) | html_report_main
 
     } else if(params.annotate) {
