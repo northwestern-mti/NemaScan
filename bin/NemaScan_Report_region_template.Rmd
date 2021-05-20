@@ -1,6 +1,124 @@
 
 ### `r region_name`
 
+#### Fine mapping
+
+Fine mapping was performed by evaluating the genotype-phenotype relationship for variants nearby the QTL identified from GWA mapping using a vcf containing imputed variants to avoid removing variants with missing genotype information for one or a few strains. Only SNVs were considered in this mapping.
+
+```{r}
+# read in genes in region and pval
+genes_in_region <- data.table::fread(glue::glue("Fine_Mappings/Data/{trait_name}_{QTL_chrom}_{QTL_start}-{QTL_end}_bcsq_genes.tsv"))
+    
+gene_df <- genes_in_region %>%
+    dplyr::filter(START_POS == unique(genes_in_region$START_POS)) %>%
+    dplyr::distinct(WBGeneID, PEAK_MARKER, CHROM, STRAND, TRANSCRIPTION_START_POS, 
+                    TRANSCRIPTION_END_POS, START_POS, END_POS, VARIANT_LOG10p) %>%
+    dplyr::group_by(WBGeneID) %>%
+    dplyr::mutate(VARIANT_LOG10p = max(VARIANT_LOG10p, na.rm = T)) %>%
+    dplyr::distinct()
+
+peak_variant <- as.numeric(strsplit(unique(gene_df$PEAK_MARKER), split = ":")[[1]][2])
+
+variant_df <- genes_in_region %>%
+    dplyr::filter(START_POS == unique(genes_in_region$START_POS)) %>%
+    dplyr::distinct(CHROM, POS, VARIANT_LOG10p, VARIANT_IMPACT)
+
+variant_df$VARIANT_IMPACT[is.na(variant_df$VARIANT_IMPACT)] <- "Intergenic"
+
+xs <- unique(gene_df$START_POS)
+xe <- unique(gene_df$END_POS)
+cq <- unique(gene_df$CHROM)
+
+max_logp <- unique(max(variant_df$VARIANT_LOG10p, na.rm = T))/150
+
+gene_plot <- ggplot(gene_df) +
+    geom_vline(aes(xintercept = peak_variant/1e6),
+               linetype=3, color = "cyan")+
+    geom_segment(aes(x = ifelse(STRAND == "+", TRANSCRIPTION_START_POS/1e6, TRANSCRIPTION_END_POS/1e6),
+                     xend = ifelse(STRAND == "+", TRANSCRIPTION_END_POS/1e6, TRANSCRIPTION_START_POS/1e6),
+                     y = VARIANT_LOG10p,
+                     yend = VARIANT_LOG10p),
+                 arrow = arrow(length = unit(5, "points")), size = 1) +
+    geom_segment(aes(x = POS/1e6,
+                     xend = POS/1e6,
+                     y = VARIANT_LOG10p+max_logp,
+                     yend = VARIANT_LOG10p-max_logp,
+                     color = VARIANT_IMPACT), data = variant_df) +
+    scale_color_manual(values = c("MODIFIER" = "gray50",
+                                  "LOW" = "gray30",
+                                  "MODERATE" = "orange",
+                                  "HIGH" = "red",
+                                  "Intergenic" = "gray80"),
+                       breaks = c("HIGH", "MODERATE", "LOW", "MODIFIER", "Intergenic"),
+                       name = "EFFECT")+
+    labs(x = "Genomic Position (Mb)",
+         y = expression(-log[10](italic(p))))+
+    theme_bw(18)+
+    xlim(c(xs/1e6, xe/1e6)) +
+    theme(legend.position = "top",
+          panel.grid = element_blank())
+
+print(gene_plot)
+    
+    # ggsave(gene_plot,
+    #        filename = glue::glue("{analysis_trait}_{cq}_{xs}-{xe}_gene_plot_{ann_type}.pdf"),
+    #        height=10, width = 14)
+
+
+
+```
+
+```{r}
+
+finemap <- data.table::fread(glue::glue("Fine_Mappings/Data/{trait_name}.{QTL_chrom}.{QTL_start}.{QTL_end}.finemap_inbred.fastGWA")) %>%
+  dplyr::mutate(CHR = as.factor(CHR),
+                SNP = as.factor(SNP),
+                POS = as.numeric(POS),
+                AF1 = as.numeric(AF1),
+                P = as.numeric(P))
+ROI.geno.matrix <- data.table::fread(glue::glue("Fine_Mappings/Data/{trait_name}.{QTL_chrom}:{QTL_start}-{QTL_end}.ROI_Genotype_Matrix.tsv"))
+ROI.LD <- data.table::fread(glue::glue("Fine_Mappings/Data/{trait_name}.{QTL_chrom}.{QTL_start}.{QTL_end}.LD.tsv"))
+
+peakp <- unique(ROI.LD$BP_A)
+
+finemap_peaks <- na.omit(finemap) %>%
+  dplyr::filter(POS == peakp)
+
+finemap_peaks$POS <- as.numeric(finemap_peaks$POS)
+
+# add strain genotype to ld file for snpeff later
+roi_genotype <- ROI.geno.matrix %>%
+  tidyr::gather(strain, allele, -c(CHROM:ALT)) %>%
+  dplyr::mutate(allele = ifelse(allele == -1, "REF", ifelse(allele == 1, "ALT", NA))) %>%
+  dplyr::group_by(CHROM, POS, REF, ALT, allele) %>%
+  dplyr::summarize(strains = paste(strain, collapse = ",")) 
+
+pr_roi_ld <- ROI.LD %>%
+  dplyr::mutate(peak_marker = gsub("_", ":", unique(finemap_peaks$SNP))) %>%
+  dplyr::mutate(SNP = SNP_B) %>%
+  dplyr::select(peak_marker, peak_maf = MAF_A, SNP, maf_marker_b = MAF_B, ld_r2 = R2) %>%
+  dplyr::mutate(ld_r2 = as.numeric(ld_r2)) %>%
+  dplyr::filter(!is.na(ld_r2)) %>%
+  dplyr::left_join(finemap,., by = "SNP") %>%
+  dplyr::left_join(.,roi_genotype)
+
+peak_roi_marker <- dplyr::filter(pr_roi_ld, POS == peakp)
+
+ld_plot <- ggplot(pr_roi_ld, mapping = aes(x = POS/1000000, y = as.numeric(-log(P)), fill = ld_r2)) +
+  theme_bw(15) +
+  geom_point(shape = 23, size = 3) +
+  geom_point(aes(y = -log(P)), shape = 23, size = 3, fill = "red",
+             data = peak_roi_marker) +
+  scale_fill_distiller(palette = "PuOr", name = bquote(r^2)) +
+  labs(x = "Genomic Position (Mb)",
+       y = expression(-log[10](italic(p))))
+
+# ggsave(ld_plot, filename = finemap_plot.pdf", height = 4, width = 12)
+
+print(ld_plot)
+
+```
+
 #### Divergent regions
 
 ```{r}
@@ -210,7 +328,7 @@ test %>%
 <br>
 
 #### Haplotype
-Two different color schemes were used to plot the same data, to better differentiate different haplotypes.
+
 <br>
 ```{r, fig.height=20, fig.width=20}
 # if (file.info("all_QTL_div.bed")$size!=0) {
@@ -218,7 +336,7 @@ Two different color schemes were used to plot the same data, to better different
 haplotype_in_QTL_region <- read.delim("Divergent_and_haplotype/haplotype_in_QTL_region.txt", header=FALSE, stringsAsFactors=FALSE) %>% 
     dplyr::select(-V13)
 
-names(haplotype_in_QTL_region) <- c("chromosome", "start", "stop", "haplotype", "isotype", "plotpoint", "segment", "color", "color_new", "Chrom", "Region_start", "Region_end")
+names(haplotype_in_QTL_region) <- c("chromosome", "start", "stop", "haplotype", "isotype", "plotpoint", "segment", "color", "Chrom", "Region_start", "Region_end")
 
 
 ########### filter only tested strains
@@ -228,7 +346,7 @@ names(haplotype_in_QTL_region) <- c("chromosome", "start", "stop", "haplotype", 
 
 plot_df <- haplotype_in_QTL_region %>%
     dplyr::filter(Chrom == QTL_chrom & Region_start == QTL_start) %>% 
-    dplyr::select(chromosome, start, stop, haplotype, isotype, plotpoint, segment, color, color_new)
+    dplyr::select(chromosome, start, stop, haplotype, isotype, plotpoint, segment, color)
 
 
 ########### sort by haplotype of 1st and last segment
@@ -276,10 +394,10 @@ mcolor_grp <- plot_df %>%
     dplyr::distinct()
 mcolor <- mcolor_grp$color
 
-mcolor_grp2 <- plot_df %>% 
-    dplyr::select(haplotype, color_new) %>% 
-    dplyr::distinct()
-mcolor2 <- mcolor_grp2$color_new
+# mcolor_grp2 <- plot_df %>% 
+#     dplyr::select(haplotype, color_new) %>% 
+#     dplyr::distinct()
+# mcolor2 <- mcolor_grp2$color_new
 
 names(mcolor) <- mcolor_grp$haplotype
 
@@ -310,22 +428,22 @@ p1 <- ggplot2::ggplot(filter(plot_df),
 #ggsave(paste0("haplotype_", QTL_Chrom, ".", QTL_Region_start, ".", QTL_Region_end, ".png"), p, height = 30, width = 8)
 
 
-p2 <- ggplot2::ggplot(filter(plot_df),
-             ggplot2::aes(x = start, xend = stop,
-                 y = isotype, yend = isotype,
-                 color = haplotype)) +
-    ggplot2::geom_segment(size = 3) +
-    ggplot2::scale_color_manual(values = mcolor2) +
-    ggplot2::xlab("Position") +
-    ggplot2::theme_bw() +
-    ggplot2::coord_cartesian(xlim=c(QTL_start, QTL_end)) +
-    ggplot2::theme(legend.position="none") +
-    ggplot2::geom_vline(xintercept = QTL_Peak) +
-    ggplot2::facet_grid(geno_group ~ ., scales = "free", space = "free") + 
-    ggplot2::theme(panel.spacing = unit(1, "lines"))
+# p2 <- ggplot2::ggplot(filter(plot_df),
+#              ggplot2::aes(x = start, xend = stop,
+#                  y = isotype, yend = isotype,
+#                  color = haplotype)) +
+#     ggplot2::geom_segment(size = 3) +
+#     ggplot2::scale_color_manual(values = mcolor2) +
+#     ggplot2::xlab("Position") +
+#     ggplot2::theme_bw() +
+#     ggplot2::coord_cartesian(xlim=c(QTL_start, QTL_end)) +
+#     ggplot2::theme(legend.position="none") +
+#     ggplot2::geom_vline(xintercept = QTL_Peak) +
+#     ggplot2::facet_grid(geno_group ~ ., scales = "free", space = "free") + 
+#     ggplot2::theme(panel.spacing = unit(1, "lines"))
 
-
-cowplot::plot_grid(p1, p2, ncol=2)
+print(p1)
+# cowplot::plot_grid(p1, p2, ncol=2)
 
 # ggplotly(p1) # cannot get the grid panel size to maintain the scale. to be fixed.
 ```
