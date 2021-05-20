@@ -855,7 +855,11 @@ process divergent_and_haplotype {
 
   bedtools intersect -a ${haplotype_df_isotype} -b QTL_region.bed -wo | sort -k1,1 -k2,2n | uniq > haplotype_in_QTL_region.txt
 
+<<<<<<< HEAD
   cp ${div_isotype_list} ./divergent_isotype_list2.txt
+=======
+  cp ${div_isotype_list} ./div_isotype_list2.txt
+>>>>>>> 6f3e09606f420597f1421dca95a5f12399e053aa
 
   """
 
@@ -887,8 +891,12 @@ process html_report_main {
 
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" > .Rprofile
 
+    cat `which test.Rmd` | sed "s/TRAIT_NAME_HOLDER/${TRAIT}/g" > test.Rmd
+
+    Rscript -e "rmarkdown::render('test.Rmd')
+
     # probably need to change root dir...
-    Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${workflow.launchDir}/${params.out}')"
+    # Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='gs://nf-pipeline/output/NemaScan-20210505/')"
 
   """
 }
