@@ -267,7 +267,7 @@ workflow {
         peaks
             .spread(traits_to_map)
             .combine(divergent_and_haplotype.out.div_done)
-            .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true) | html_report_main
+            .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true) //| html_report_main
 
     } else if(params.annotate) {
 
@@ -881,10 +881,10 @@ process gcta_fine_maps {
         --pheno plink_finemap_traits.tsv \\
         --maf ${params.maf}
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/Finemap_QTL_Intervals.R  > Finemap_QTL_Intervals.R 
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `which Finemap_QTL_Intervals.R`  > Finemap_QTL_Intervals.R 
         Rscript --vanilla Finemap_QTL_Intervals.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/plot_genes.R  > plot_genes.R 
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `which plot_genes.R`  > plot_genes.R 
         Rscript --vanilla plot_genes.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${params.genes} ${annotation}
 
         done
