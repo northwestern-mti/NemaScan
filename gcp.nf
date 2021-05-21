@@ -254,7 +254,8 @@ workflow {
 
         //fine mapping
         prep_ld_files.out.finemap_preps
-            .combine(ann_file) | gcta_fine_maps
+            .combine(ann_file)
+            .combine("${params.genes}")| gcta_fine_maps
 
         // divergent regions and haplotypes
         peaks
@@ -854,7 +855,7 @@ process gcta_fine_maps {
     //errorStrategy 'ignore'
 
     input:
-        tuple val(TRAIT), file(pheno), file(ROI_geno), file(ROI_LD), file(bim), file(bed), file(fam), file(annotation)
+        tuple val(TRAIT), file(pheno), file(ROI_geno), file(ROI_LD), file(bim), file(bed), file(fam), file(annotation), file(genefile)
 
     output:
         tuple file("*.fastGWA"), val(TRAIT), file("*.prLD_df.tsv"), file("*.pdf"), file("*_genes.tsv")
@@ -885,7 +886,7 @@ process gcta_fine_maps {
         Rscript --vanilla Finemap_QTL_Intervals.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
 
         echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `which plot_genes.R`  > plot_genes.R 
-        Rscript --vanilla plot_genes.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${params.genes} ${annotation}
+        Rscript --vanilla plot_genes.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
 
         done
 
