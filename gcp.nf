@@ -255,7 +255,7 @@ workflow {
         //fine mapping
         prep_ld_files.out.finemap_preps
             .combine(ann_file)
-            .combine("${params.genes}")| gcta_fine_maps
+            .combine(Channel.fromPath("${params.genes}"))| gcta_fine_maps
 
         // divergent regions and haplotypes
         peaks
