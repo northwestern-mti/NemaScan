@@ -107,7 +107,6 @@ O~~      O~~  O~~~~   O~~~  O~  O~~  O~~ O~~~  O~~ ~~     O~~~  O~~ O~~~O~~~  O~
     log.info "----------------------------------------------------------------"
     log.info "----------------------------------------------------------------"
     log.info "Mandatory arguments:"
-    log.info "--traitfile              String                Name of file that contains phenotypes. File should be tab-delimited with the columns: strain trait1 trait2 ..."
     log.info "--vcf                    String                Name of VCF to extract variants from. There should also be a tabix-generated index file with the same name in the directory that contains the VCF. If none is provided, the pipeline will download the latest VCF from CeNDR"
     log.info "Optional arguments:"
     log.info "--maf                    String                Minimum minor allele frequency to use for single-marker mapping (Default: 0.05)"
@@ -186,6 +185,7 @@ log.info "Trait File                              = ${params.traitfile}"
 log.info "VCF                                     = ${params.vcf}"
 log.info "Significance Threshold                  = ${params.sthresh}"
 log.info "Result Directory                        = ${params.out}"
+log.info "Isotype file                            = ${params.data_dir}/isotypes/strain_isotype_lookup.tsv"
 log.info ""
 }
 
