@@ -6,35 +6,6 @@ if( !nextflow.version.matches('>20.0') ) {
     exit 1
 }
 
-nextflow.preview.dsl=2
-
-date = new Date().format( 'yyyyMMdd' )
-
-/*
-~ ~ ~ > * Parameters: common to all analyses
-*/
-//params.traitfile   = null
-//params.vcf         = null
-params.help        = null
-if(params.simulate) {
-    params.e_mem   = "100"
-} else {
-    params.e_mem   = "10" // I noticed it was crashing with 100 gb for mappings... maybe too much allocation?
-}
-params.eigen_mem   = params.e_mem + " GB"
-//params.R_libpath   = "/projects/b1059/software/R_lib_3.6.0"
-params.out         = "Analysis_Results-${date}"
-params.debug       = null
-params.species     = "elegans"
-params.wbb         = "WS276"
-params.data_dir    = "${workflow.projectDir}/input_data/${params.species}"
-params.numeric_chrom = "${workflow.projectDir}/input_data/all_species/rename_chromosomes"
-params.sparse_cut  = 0.01
-params.group_qtl   = 1000
-params.ci_size     = 150
-params.sthresh     = "BF"
-params.p3d         = "TRUE"
-params.maf         = 0.05
 
 if(params.debug) {
     println """
@@ -49,21 +20,13 @@ if(params.debug) {
     impute_vcf = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
     impute_vcf_index = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
     ann_file = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/WI.330_TEST.strain-annotation.bcsq.tsv")
-} else { // does this work with gcp config? which takes preference?
-    vcf = Channel.fromPath("/projects/b1059/data/c_elegans/WI/variation/${params.vcf}/vcf/WI.${params.vcf}.hard-filter.isotype.vcf.gz")
-    vcf_index = Channel.fromPath("/projects/b1059/data/c_elegans/WI/variation/${params.vcf}/vcf/WI.${params.vcf}.hard-filter.isotype.vcf.gz.tbi")
-    impute_vcf = Channel.fromPath("/projects/b1059/data/c_elegans/WI/variation/${params.vcf}/vcf/WI.${params.vcf}.impute.isotype.vcf.gz")
-    impute_vcf_index = Channel.fromPath("/projects/b1059/data/c_elegans/WI/variation/${params.vcf}/vcf/WI.${params.vcf}.impute.isotype.vcf.gz.tbi")
 }
 
 
 /*
 ~ ~ ~ > * Parameters: for burden mapping
 */
-params.refflat   = "${params.data_dir}/annotations/c_${params.species}_${params.wbb}_refFlat.txt"
-params.freqUpper = 0.05
-params.minburden = 2
-params.genes     = "${workflow.projectDir}/bin/gene_ref_flat.Rda"
+
 
 
 if (params.help) {
