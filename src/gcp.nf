@@ -175,8 +175,6 @@ workflow {
     // for mapping
     if(params.maps) {
 
-        log.info "${params.trait_file}"
-        log.info "${params.isotype_file}"
         // Fix strain names
         Channel.fromPath("${params.trait_file}")
             .combine(Channel.fromPath("${params.isotype_file}")) | fix_strain_names_bulk
@@ -184,9 +182,6 @@ workflow {
                 .flatten()
                 .map { file -> tuple(file.baseName.replaceAll(/pr_/,""), file) }
 
-        log.info "${params.trait_file}"
-        log.info "${params.isotype_file}"
-        
         // Genotype matrix
         pheno_strains = fix_strain_names_bulk.out.phenotyped_strains_to_analyze
 
@@ -363,6 +358,7 @@ THIS WILL NEED TO BE UPDATED TO HANDLE OTHER SPECIES
 process fix_strain_names_bulk {
 
     //executor 'local'
+    log.info "fix_strain_names_bulk"
 
     tag {"BULK TRAIT"}
 
@@ -383,6 +379,7 @@ process fix_strain_names_bulk {
 
         Rscript --vanilla Fix_Isotype_names_bulk.R ${phenotypes} fix $isotype_lookup
     """
+    log.info "fix_strain_names_bulk"
 
 }
 
