@@ -1,11 +1,40 @@
 #! usr/bin/env nextflow
+
 if( !nextflow.version.matches('>20.0') ) {
     println "This workflow requires Nextflow version 20.0 or greater -- You are running version $nextflow.version"
     println "On QUEST, you can use `module load python/anaconda3.6; source activate /projects/b1059/software/conda_envs/nf20_env`"
     exit 1
 }
 
-nextflow.enable.dsl=2
+nextflow.preview.dsl=2
+
+date = new Date().format( 'yyyyMMdd' )
+
+/*
+~ ~ ~ > * Parameters: common to all analyses
+*/
+//params.trait_file   = null
+//params.vcf         = null
+params.help        = null
+if(params.simulate) {
+    params.e_mem   = "100"
+} else {
+    params.e_mem   = "10" // I noticed it was crashing with 100 gb for mappings... maybe too much allocation?
+}
+params.eigen_mem   = params.e_mem + " GB"
+//params.R_libpath   = "/projects/b1059/software/R_lib_3.6.0"
+params.out         = "Analysis_Results-${date}"
+params.debug       = null
+params.species     = "elegans"
+params.wbb         = "WS276"
+params.data_dir    = "${workflow.projectDir}/input_data/${params.species}"
+params.numeric_chrom = "${workflow.projectDir}/input_data/all_species/rename_chromosomes"
+params.sparse_cut  = 0.01
+params.group_qtl   = 1000
+params.ci_size     = 150
+params.sthresh     = "BF"
+params.p3d         = "TRUE"
+params.maf         = 0.05
 
 if(params.debug) {
     println """
@@ -13,32 +42,32 @@ if(params.debug) {
     """
     // debug for now with small vcf
     params.vcf = "330_TEST.vcf.gz"
-    vcf = Channel.fromPath("${workDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
-    vcf_index = Channel.fromPath("${workDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
-    params.trait_file = "${workDir}/input_data/elegans/phenotypes/FileS2_wipheno.tsv"
+    vcf = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
+    vcf_index = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
+    params.trait_file = "${workflow.projectDir}/input_data/elegans/phenotypes/FileS2_wipheno.tsv"
     // debug can use same vcf for impute and normal
-    impute_vcf = Channel.fromPath("${workDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
-    impute_vcf_index = Channel.fromPath("${workDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
-    ann_file = Channel.fromPath("${workDir}/input_data/elegans/genotypes/WI.330_TEST.strain-annotation.bcsq.tsv")
-} else {
-  log.info "${params.vcf}"
-  log.info "${params.vcf_index}"
-  log.info "${params.impute_vcf}"
-  log.info "${params.impute_vcf_index}"
-  log.info "${params.ann_file}"
-  log.info "${params.trait_file}"
+    impute_vcf = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
+    impute_vcf_index = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
+    ann_file = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/WI.330_TEST.strain-annotation.bcsq.tsv")
+} else { 
     vcf = Channel.fromPath("${params.vcf}")
     vcf_index = Channel.fromPath("${params.vcf_index}")
+    // debug can use same vcf for impute and normal
     impute_vcf = Channel.fromPath("${params.impute_vcf}")
     impute_vcf_index = Channel.fromPath("${params.impute_vcf_index}")
     ann_file = Channel.fromPath("${params.ann_file}")
+    isotype_file = Channel.fromPath("${params.isotype_file}")
+    trait_file = Channel.fromPath("${params.trait_file}")
 }
 
 
 /*
 ~ ~ ~ > * Parameters: for burden mapping
 */
-
+params.refflat   = "${params.data_dir}/annotations/c_${params.species}_${params.wbb}_refFlat.txt"
+params.freqUpper = 0.05
+params.minburden = 2
+params.genes     = "${workflow.projectDir}/bin/gene_ref_flat.Rda"
 
 
 if (params.help) {
@@ -78,10 +107,11 @@ O~~      O~~  O~~~~   O~~~  O~  O~~  O~~ O~~~  O~~ ~~     O~~~  O~~ O~~~O~~~  O~
     log.info "             -profile mappings USAGE"
     log.info "----------------------------------------------------------------"
     log.info "----------------------------------------------------------------"
-    log.info "nextflow main.nf --vcf input_data/elegans/genotypes/WI.20180527.impute.vcf.gz --trait_file input_data/elegans/phenotypes/PC1.tsv -profile mappings --p3d TRUE"
+    log.info "nextflow main.nf --vcf input_data/elegans/genotypes/WI.20180527.impute.vcf.gz --traitfile input_data/elegans/phenotypes/PC1.tsv -profile mappings --p3d TRUE"
     log.info "----------------------------------------------------------------"
     log.info "----------------------------------------------------------------"
     log.info "Mandatory arguments:"
+    log.info "--traitfile              String                Name of file that contains phenotypes. File should be tab-delimited with the columns: strain trait1 trait2 ..."
     log.info "--vcf                    String                Name of VCF to extract variants from. There should also be a tabix-generated index file with the same name in the directory that contains the VCF. If none is provided, the pipeline will download the latest VCF from CeNDR"
     log.info "Optional arguments:"
     log.info "--maf                    String                Minimum minor allele frequency to use for single-marker mapping (Default: 0.05)"
@@ -176,8 +206,8 @@ workflow {
     if(params.maps) {
 
         // Fix strain names
-        Channel.fromPath("${params.trait_file}")
-            .combine(Channel.fromPath("${params.isotype_file}")) | fix_strain_names_bulk
+        trait_file
+            .combine(isotype_file) | fix_strain_names_bulk
         traits_to_map = fix_strain_names_bulk.out.fixed_strain_phenotypes
                 .flatten()
                 .map { file -> tuple(file.baseName.replaceAll(/pr_/,""), file) }
@@ -185,7 +215,7 @@ workflow {
         // Genotype matrix
         pheno_strains = fix_strain_names_bulk.out.phenotyped_strains_to_analyze
 
-        vcf.combine(vcf_index)
+        vcf.spread(vcf_index)
                 .combine(pheno_strains) | vcf_to_geno_matrix
 
         // EIGEN
@@ -195,14 +225,14 @@ workflow {
 
         // GWAS mapping
         pheno_strains
-            .combine(traits_to_map)
-            .combine(vcf.combine(vcf_index))
-            .combine(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
+            .spread(traits_to_map)
+            .spread(vcf.spread(vcf_index))
+            .spread(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
 
         // process GWAS mapping
         traits_to_map
-            .combine(collect_eigen_variants.out)
-            .combine(vcf_to_geno_matrix.out)
+            .spread(collect_eigen_variants.out)
+            .spread(vcf_to_geno_matrix.out)
             .combine(Channel.from("${params.p3d}"))
             .combine(Channel.from("${params.sthresh}"))
             .combine(Channel.from("${params.group_qtl}"))
@@ -223,9 +253,9 @@ workflow {
         peaks
             .splitCsv(sep: '\t', skip: 1)
             .join(generate_plots.out.maps_from_plot, by: 2)
-            .combine(impute_vcf.combine(impute_vcf_index))
-            .combine(pheno_strains)
-            .combine(Channel.fromPath("${params.numeric_chrom}")) | prep_ld_files
+            .spread(impute_vcf.spread(impute_vcf_index))
+            .spread(pheno_strains)
+            .spread(Channel.fromPath("${params.numeric_chrom}")) | prep_ld_files
 
         //fine mapping
         prep_ld_files.out.finemap_preps
@@ -234,14 +264,14 @@ workflow {
 
         // divergent regions and haplotypes
         peaks
-            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/divergent_bins.bed"))
-            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/divergent_df_isotype.bed"))
-            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/haplotype_df_isotype.bed"))
-            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/div_isotype_list.txt")) | divergent_and_haplotype
+            .combine(Channel.fromPath("${params.data_dir}/isotypes/divergent_bins.bed"))
+            .combine(Channel.fromPath("${params.data_dir}/isotypes/divergent_df_isotype.bed"))
+            .combine(Channel.fromPath("${params.data_dir}/isotypes/haplotype_df_isotype.bed"))
+            .combine(Channel.fromPath("${params.data_dir}/isotypes/div_isotype_list.txt")) | divergent_and_haplotype
 
         // generate main html report
         peaks
-            .combine(traits_to_map)
+            .spread(traits_to_map)
             .combine(divergent_and_haplotype.out.div_done)
             .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true) //| html_report_main
 
@@ -263,9 +293,9 @@ workflow {
 
         Channel.from(pop_file.collect { it.tokenize( ' ' ) })
             .map { SM, STRAINS -> [SM, STRAINS] }
-            .combine(vcf.combine(vcf_index))
-            .combine(Channel.fromPath("${params.numeric_chrom}"))
-            .combine(Channel.fromPath("${params.simulate_maf}").splitCsv()) | prepare_simulation_files
+            .spread(vcf.spread(vcf_index))
+            .spread(Channel.fromPath("${params.numeric_chrom}"))
+            .spread(Channel.fromPath("${params.simulate_maf}").splitCsv()) | prepare_simulation_files
 
         // eigen
         contigs = Channel.from(["1", "2", "3", "4", "5", "6"])
@@ -279,9 +309,9 @@ workflow {
         if(params.simulate_qtlloc){
 
             collect_eigen_variants_sims.out
-                .combine(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
-                .combine(Channel.fromPath("${params.simulate_qtlloc}"))
-                .combine(Channel.fromPath("${params.simulate_eff}").splitCsv())
+                .spread(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
+                .spread(Channel.fromPath("${params.simulate_qtlloc}"))
+                .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps)) | simulate_effects_loc
 
             sim_phen_inputs = simulate_effects_loc.out
@@ -289,8 +319,8 @@ workflow {
         } else {
 
             collect_eigen_variants_sims.out
-                .combine(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
-                .combine(Channel.fromPath("${params.simulate_eff}").splitCsv())
+                .spread(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
+                .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps)) | simulate_effects_genome
 
             sim_phen_inputs = simulate_effects_genome.out
@@ -298,13 +328,13 @@ workflow {
         }
 
         sim_phen_inputs
-            .combine(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
+            .spread(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
 
         // simulation mappings
         simulate_map_phenotypes.out.gcta_intervals
-            .combine(Channel.from("${params.sthresh}"))
-            .combine(Channel.from("${params.group_qtl}"))
-            .combine(Channel.from("${params.ci_size}")) | get_gcta_intervals
+            .spread(Channel.from("${params.sthresh}"))
+            .spread(Channel.from("${params.group_qtl}"))
+            .spread(Channel.from("${params.ci_size}")) | get_gcta_intervals
     }
 
 }
@@ -334,7 +364,7 @@ process update_annotations {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/update_annotations.R > update_annotations.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/update_annotations.R > update_annotations.R
         Rscript --vanilla update_annotations.R ${params.wb_build} ${params.species} ${gtf_to_refflat}
     """
 
@@ -931,7 +961,7 @@ process html_report_main {
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" > .Rprofile
 
     # probably need to change root dir...
-    # Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${outDir}/')"
+    # Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='gs://nf-pipeline/output/NemaScan-20210505/')"
 
   """
 }
@@ -1043,7 +1073,7 @@ process chrom_eigen_variants_sims {
         awk -v chrom="${CHROM}" '{if(\$1 == "CHROM" || \$1 == chrom) print}' > ${CHROM}_gm.tsv
 
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/Get_GenoMatrix_Eigen.R > Get_GenoMatrix_Eigen.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/Get_GenoMatrix_Eigen.R > Get_GenoMatrix_Eigen.R
         Rscript --vanilla Get_GenoMatrix_Eigen.R ${CHROM}_gm.tsv ${CHROM}
 
         mv ${CHROM}_independent_snvs.csv ${CHROM}_${strain_set}_${MAF}_independent_snvs.csv
@@ -1093,7 +1123,7 @@ process simulate_effects_loc {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
         Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range} ${qtl_loc_bed}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
@@ -1117,7 +1147,7 @@ process simulate_effects_genome {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
         Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
@@ -1225,16 +1255,16 @@ process get_gcta_intervals {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/Aggregate_Mappings.R > Aggregate_Mappings.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/Aggregate_Mappings.R > Aggregate_Mappings.R
         Rscript --vanilla Aggregate_Mappings.R ${lmmexact_loco} ${lmmexact_inbred}
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/Find_Aggregate_Intervals.R > Find_Aggregate_Intervals.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/Find_Aggregate_Intervals.R > Find_Aggregate_Intervals.R
         Rscript --vanilla Find_Aggregate_Intervals.R ${gm} ${phenotypes} temp.aggregate.mapping.tsv ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} aggregate
         
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/Find_GCTA_Intervals.R > Find_GCTA_Intervals.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/Find_GCTA_Intervals.R > Find_GCTA_Intervals.R
         Rscript --vanilla Find_GCTA_Intervals.R ${gm} ${phenotypes} ${lmmexact_inbred} ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} LMM-EXACT-INBRED
         
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workDir}/bin/Find_GCTA_Intervals_LOCO.R > Find_GCTA_Intervals_LOCO.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/Find_GCTA_Intervals_LOCO.R > Find_GCTA_Intervals_LOCO.R
         Rscript --vanilla Find_GCTA_Intervals_LOCO.R ${gm} ${phenotypes} ${lmmexact_loco} ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} LMM-EXACT-LOCO
 
     """
@@ -1386,8 +1416,6 @@ workflow.onComplete {
     Duration    : ${workflow.duration}
     Success     : ${workflow.success}
     workDir     : ${workflow.workDir}
-    outDir      : ${workflow.outDir}
-    projectDir  : ${workflow.projectDir}
     exit status : ${workflow.exitStatus}
     Error report: ${workflow.errorReport ?: '-'}
     Git info: $workflow.repository - $workflow.revision [$workflow.commitId]
