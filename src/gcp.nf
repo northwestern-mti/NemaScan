@@ -15,11 +15,17 @@ if(params.debug) {
     params.vcf = "330_TEST.vcf.gz"
     vcf = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
     vcf_index = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
-    params.traitfile = "${workflow.projectDir}/input_data/elegans/phenotypes/FileS2_wipheno.tsv"
+    params.trait_file = "${workflow.projectDir}/input_data/elegans/phenotypes/FileS2_wipheno.tsv"
     // debug can use same vcf for impute and normal
     impute_vcf = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz")
     impute_vcf_index = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
     ann_file = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/WI.330_TEST.strain-annotation.bcsq.tsv")
+} else {
+    vcf = Channel.fromPath("${params.vcf}")
+    vcf_index = Channel.fromPath("${params.vcf_index}")
+    impute_vcf = Channel.fromPath("${params.impute_vcf}")
+    impute_vcf_index = Channel.fromPath("${params.impute_vcf_index}")
+    ann_file = Channel.fromPath("${params.ann_file}")
 }
 
 
@@ -66,7 +72,7 @@ O~~      O~~  O~~~~   O~~~  O~  O~~  O~~ O~~~  O~~ ~~     O~~~  O~~ O~~~O~~~  O~
     log.info "             -profile mappings USAGE"
     log.info "----------------------------------------------------------------"
     log.info "----------------------------------------------------------------"
-    log.info "nextflow main.nf --vcf input_data/elegans/genotypes/WI.20180527.impute.vcf.gz --traitfile input_data/elegans/phenotypes/PC1.tsv -profile mappings --p3d TRUE"
+    log.info "nextflow main.nf --vcf input_data/elegans/genotypes/WI.20180527.impute.vcf.gz --trait_file input_data/elegans/phenotypes/PC1.tsv -profile mappings --p3d TRUE"
     log.info "----------------------------------------------------------------"
     log.info "----------------------------------------------------------------"
     log.info "Mandatory arguments:"
@@ -144,11 +150,11 @@ O~~      O~~  O~~~~   O~~~  O~  O~~  O~~ O~~~  O~~ ~~     O~~~  O~~ O~~~O~~~  O~
 
     '''
 log.info ""
-log.info "Trait File                              = ${params.traitfile}"
+log.info "Trait File                              = ${params.trait_file}"
 log.info "VCF                                     = ${params.vcf}"
 log.info "Significance Threshold                  = ${params.sthresh}"
 log.info "Result Directory                        = ${params.out}"
-log.info "Isotype file                            = ${params.data_dir}/isotypes/strain_isotype_lookup.tsv"
+log.info "Isotype file                            = ${params.isotype_file}"
 log.info ""
 }
 
@@ -164,8 +170,8 @@ workflow {
     if(params.maps) {
 
         // Fix strain names
-        Channel.fromPath("${params.traitfile}")
-            .combine(Channel.fromPath("${params.data_dir}/isotypes/strain_isotype_lookup.tsv")) | fix_strain_names_bulk
+        Channel.fromPath("${params.trait_file}")
+            .combine(Channel.fromPath("${params.isotype_file}")) | fix_strain_names_bulk
         traits_to_map = fix_strain_names_bulk.out.fixed_strain_phenotypes
                 .flatten()
                 .map { file -> tuple(file.baseName.replaceAll(/pr_/,""), file) }
@@ -919,7 +925,7 @@ process html_report_main {
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" > .Rprofile
 
     # probably need to change root dir...
-    # Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${workDir}/output/NemaScan-20210505/')"
+    # Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${outDir}/')"
 
   """
 }
@@ -1374,13 +1380,15 @@ workflow.onComplete {
     Duration    : ${workflow.duration}
     Success     : ${workflow.success}
     workDir     : ${workflow.workDir}
+    outDir      : ${workflow.outDir}
+    projectDir  : ${workflow.projectDir}
     exit status : ${workflow.exitStatus}
     Error report: ${workflow.errorReport ?: '-'}
     Git info: $workflow.repository - $workflow.revision [$workflow.commitId]
 
     { Parameters }
     ---------------------------
-    Phenotype File                          = ${params.traitfile}
+    Phenotype File                          = ${params.trait_file}
     VCF                                     = ${params.vcf}
 
     Significance Threshold                  = ${params.sthresh}
