@@ -228,10 +228,10 @@ workflow {
 
         // divergent regions and haplotypes
         peaks
-            .combine(Channel.fromPath("${params.data_dir}/isotypes/divergent_bins.bed"))
-            .combine(Channel.fromPath("${params.data_dir}/isotypes/divergent_df_isotype.bed"))
-            .combine(Channel.fromPath("${params.data_dir}/isotypes/haplotype_df_isotype.bed"))
-            .combine(Channel.fromPath("${params.data_dir}/isotypes/div_isotype_list.txt")) | divergent_and_haplotype
+            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/divergent_bins.bed"))
+            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/divergent_df_isotype.bed"))
+            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/haplotype_df_isotype.bed"))
+            .combine(Channel.fromPath("${workflow.dataDir}/isotypes/div_isotype_list.txt")) | divergent_and_haplotype
 
         // generate main html report
         peaks
