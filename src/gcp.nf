@@ -21,13 +21,24 @@ if(params.debug) {
     impute_vcf_index = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/330_TEST.vcf.gz.tbi")
     ann_file = Channel.fromPath("${workflow.projectDir}/input_data/elegans/genotypes/WI.330_TEST.strain-annotation.bcsq.tsv")
 } else {
+  log.info "${params.vcf}"
+  log.info "${params.vcf_index}"
+  log.info "${params.impute_vcf}"
+  log.info "${params.impute_vcf_index}"
+  log.info "${params.ann_file}"
+  log.info "${params.trait_file}"
     vcf = Channel.fromPath("${params.vcf}")
     vcf_index = Channel.fromPath("${params.vcf_index}")
     impute_vcf = Channel.fromPath("${params.impute_vcf}")
     impute_vcf_index = Channel.fromPath("${params.impute_vcf_index}")
     ann_file = Channel.fromPath("${params.ann_file}")
 }
-
+  log.info "${params.vcf}"
+  log.info "${params.vcf_index}"
+  log.info "${params.impute_vcf}"
+  log.info "${params.impute_vcf_index}"
+  log.info "${params.ann_file}"
+  log.info "${params.trait_file}"
 
 /*
 ~ ~ ~ > * Parameters: for burden mapping
