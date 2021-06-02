@@ -358,7 +358,6 @@ THIS WILL NEED TO BE UPDATED TO HANDLE OTHER SPECIES
 process fix_strain_names_bulk {
 
     //executor 'local'
-    log.info "fix_strain_names_bulk"
 
     tag {"BULK TRAIT"}
 
@@ -379,7 +378,6 @@ process fix_strain_names_bulk {
 
         Rscript --vanilla Fix_Isotype_names_bulk.R ${phenotypes} fix $isotype_lookup
     """
-    log.info "fix_strain_names_bulk"
 
 }
 
