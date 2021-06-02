@@ -5,7 +5,7 @@ if( !nextflow.version.matches('>20.0') ) {
     exit 1
 }
 
-nextflow.preview.dsl=2
+nextflow.enable.dsl=2
 
 if(params.debug) {
     println """
@@ -33,12 +33,7 @@ if(params.debug) {
     impute_vcf_index = Channel.fromPath("${params.impute_vcf_index}")
     ann_file = Channel.fromPath("${params.ann_file}")
 }
-  log.info "${params.vcf}"
-  log.info "${params.vcf_index}"
-  log.info "${params.impute_vcf}"
-  log.info "${params.impute_vcf_index}"
-  log.info "${params.ann_file}"
-  log.info "${params.trait_file}"
+
 
 /*
 ~ ~ ~ > * Parameters: for burden mapping
@@ -190,7 +185,7 @@ workflow {
         // Genotype matrix
         pheno_strains = fix_strain_names_bulk.out.phenotyped_strains_to_analyze
 
-        vcf.spread(vcf_index)
+        vcf.combine(vcf_index)
                 .combine(pheno_strains) | vcf_to_geno_matrix
 
         // EIGEN
@@ -200,14 +195,14 @@ workflow {
 
         // GWAS mapping
         pheno_strains
-            .spread(traits_to_map)
-            .spread(vcf.spread(vcf_index))
-            .spread(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
+            .combine(traits_to_map)
+            .combine(vcf.combine(vcf_index))
+            .combine(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
 
         // process GWAS mapping
         traits_to_map
-            .spread(collect_eigen_variants.out)
-            .spread(vcf_to_geno_matrix.out)
+            .combine(collect_eigen_variants.out)
+            .combine(vcf_to_geno_matrix.out)
             .combine(Channel.from("${params.p3d}"))
             .combine(Channel.from("${params.sthresh}"))
             .combine(Channel.from("${params.group_qtl}"))
@@ -228,9 +223,9 @@ workflow {
         peaks
             .splitCsv(sep: '\t', skip: 1)
             .join(generate_plots.out.maps_from_plot, by: 2)
-            .spread(impute_vcf.spread(impute_vcf_index))
-            .spread(pheno_strains)
-            .spread(Channel.fromPath("${params.numeric_chrom}")) | prep_ld_files
+            .combine(impute_vcf.combine(impute_vcf_index))
+            .combine(pheno_strains)
+            .combine(Channel.fromPath("${params.numeric_chrom}")) | prep_ld_files
 
         //fine mapping
         prep_ld_files.out.finemap_preps
@@ -246,7 +241,7 @@ workflow {
 
         // generate main html report
         peaks
-            .spread(traits_to_map)
+            .combine(traits_to_map)
             .combine(divergent_and_haplotype.out.div_done)
             .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true) //| html_report_main
 
@@ -268,9 +263,9 @@ workflow {
 
         Channel.from(pop_file.collect { it.tokenize( ' ' ) })
             .map { SM, STRAINS -> [SM, STRAINS] }
-            .spread(vcf.spread(vcf_index))
-            .spread(Channel.fromPath("${params.numeric_chrom}"))
-            .spread(Channel.fromPath("${params.simulate_maf}").splitCsv()) | prepare_simulation_files
+            .combine(vcf.combine(vcf_index))
+            .combine(Channel.fromPath("${params.numeric_chrom}"))
+            .combine(Channel.fromPath("${params.simulate_maf}").splitCsv()) | prepare_simulation_files
 
         // eigen
         contigs = Channel.from(["1", "2", "3", "4", "5", "6"])
@@ -284,9 +279,9 @@ workflow {
         if(params.simulate_qtlloc){
 
             collect_eigen_variants_sims.out
-                .spread(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
-                .spread(Channel.fromPath("${params.simulate_qtlloc}"))
-                .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_qtlloc}"))
+                .combine(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps)) | simulate_effects_loc
 
             sim_phen_inputs = simulate_effects_loc.out
@@ -294,8 +289,8 @@ workflow {
         } else {
 
             collect_eigen_variants_sims.out
-                .spread(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
-                .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps)) | simulate_effects_genome
 
             sim_phen_inputs = simulate_effects_genome.out
@@ -303,13 +298,13 @@ workflow {
         }
 
         sim_phen_inputs
-            .spread(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
+            .combine(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
 
         // simulation mappings
         simulate_map_phenotypes.out.gcta_intervals
-            .spread(Channel.from("${params.sthresh}"))
-            .spread(Channel.from("${params.group_qtl}"))
-            .spread(Channel.from("${params.ci_size}")) | get_gcta_intervals
+            .combine(Channel.from("${params.sthresh}"))
+            .combine(Channel.from("${params.group_qtl}"))
+            .combine(Channel.from("${params.ci_size}")) | get_gcta_intervals
     }
 
 }
