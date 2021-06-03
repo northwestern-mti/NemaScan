@@ -334,7 +334,8 @@ process update_annotations {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.binDir}/update_annotations.R > update_annotations.R
+        wget -O update_annotations ${bin_src}/update_annotations.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - update_annotations > update_annotations.R
         Rscript --vanilla update_annotations.R ${params.wbb} ${params.species} ${gtf_to_refflat}
     """
 
@@ -374,7 +375,7 @@ process fix_strain_names_bulk {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `${params.binDir}/Fix_Isotype_names_bulk.R` > Fix_Isotype_names_bulk.R 
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `${params.bin_dir}/Fix_Isotype_names_bulk.R` > Fix_Isotype_names_bulk.R 
 
         Rscript --vanilla Fix_Isotype_names_bulk.R ${phenotypes} fix $isotype_lookup
     """
@@ -1093,7 +1094,7 @@ process simulate_effects_loc {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.binDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.bin_dir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
         Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range} ${qtl_loc_bed}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
@@ -1117,7 +1118,7 @@ process simulate_effects_genome {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.binDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.bin_dir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
         Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
