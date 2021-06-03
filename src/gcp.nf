@@ -152,20 +152,22 @@ O~~      O~~  O~~~~   O~~~  O~  O~~  O~~ O~~~  O~~ ~~     O~~~  O~~ O~~~O~~~  O~
 
 
     '''
-log.info ""
-log.info "Trait File                              = ${params.trait_file}"
-log.info "Isotype File                            = ${params.isotype_file}"
-log.info "Annotation File                         = ${params.ann_file}"
-log.info ""
-log.info "VCF                                     = ${params.vcf}"
-log.info "VCF Index                               = ${params.vcf_index}"
-log.info "Impute VCF                              = ${params.impute_vcf}"
-log.info "Impute VCF Index                        = ${params.impute_vcf_index}"
-log.info ""
-log.info "Significance Threshold                  = ${params.sthresh}"
-log.info "Result Directory                        = ${params.out}"
-log.info "Isotype file                            = ${params.isotype_file}"
-log.info ""
+    log.info ""
+    log.info "Trait File                              = ${params.trait_file}"
+    log.info "Isotype File                            = ${params.isotype_file}"
+    log.info "Annotation File                         = ${params.ann_file}"
+    log.info ""
+    log.info "VCF                                     = ${params.vcf}"
+    log.info "VCF Index                               = ${params.vcf_index}"
+    log.info "Impute VCF                              = ${params.impute_vcf}"
+    log.info "Impute VCF Index                        = ${params.impute_vcf_index}"
+    log.info ""
+    log.info "Significance Threshold                  = ${params.sthresh}"
+    log.info "Result Directory                        = ${params.out}"
+    log.info "Isotype file                            = ${params.isotype_file}"
+    log.info ""
+
+}
 
 // add more params to show user ^^ how does this work with different profiles?
 
