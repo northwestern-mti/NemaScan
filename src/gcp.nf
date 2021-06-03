@@ -10,32 +10,6 @@ nextflow.preview.dsl=2
 
 date = new Date().format( 'yyyyMMdd' )
 
-/*
-~ ~ ~ > * Parameters: common to all analyses
-*/
-//params.trait_file   = null
-//params.vcf         = null
-params.help        = null
-if(params.simulate) {
-    params.e_mem   = "100"
-} else {
-    params.e_mem   = "10" // I noticed it was crashing with 100 gb for mappings... maybe too much allocation?
-}
-params.eigen_mem   = params.e_mem + " GB"
-//params.R_libpath   = "/projects/b1059/software/R_lib_3.6.0"
-params.out         = "Analysis_Results-${date}"
-params.debug       = null
-params.species     = "elegans"
-params.wbb         = "WS276"
-params.data_dir    = "${workflow.projectDir}/input_data/${params.species}"
-params.numeric_chrom = "${workflow.projectDir}/input_data/all_species/rename_chromosomes"
-params.sparse_cut  = 0.01
-params.group_qtl   = 1000
-params.ci_size     = 150
-params.sthresh     = "BF"
-params.p3d         = "TRUE"
-params.maf         = 0.05
-
 if(params.debug) {
     println """
         *** Using debug mode ***
@@ -64,10 +38,6 @@ if(params.debug) {
 /*
 ~ ~ ~ > * Parameters: for burden mapping
 */
-params.refflat   = "${params.data_dir}/annotations/c_${params.species}_${params.wbb}_refFlat.txt"
-params.freqUpper = 0.05
-params.minburden = 2
-params.genes     = "${workflow.projectDir}/bin/gene_ref_flat.Rda"
 
 
 if (params.help) {
@@ -360,12 +330,12 @@ process update_annotations {
         tuple val(gtf_to_refflat), val(save_dir)
 
     output:
-        tuple file("*canonical_geneset.gtf.gz"), file("c_${params.species}_${params.wb_build}_refFlat.txt")
+        tuple file("*canonical_geneset.gtf.gz"), file("c_${params.species}_${params.wbb}_refFlat.txt")
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/update_annotations.R > update_annotations.R
-        Rscript --vanilla update_annotations.R ${params.wb_build} ${params.species} ${gtf_to_refflat}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.binDir}/update_annotations.R > update_annotations.R
+        Rscript --vanilla update_annotations.R ${params.wbb} ${params.species} ${gtf_to_refflat}
     """
 
 }   
@@ -404,7 +374,7 @@ process fix_strain_names_bulk {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `which Fix_Isotype_names_bulk.R` > Fix_Isotype_names_bulk.R 
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - `${params.binDir}/Fix_Isotype_names_bulk.R` > Fix_Isotype_names_bulk.R 
 
         Rscript --vanilla Fix_Isotype_names_bulk.R ${phenotypes} fix $isotype_lookup
     """
@@ -1123,7 +1093,7 @@ process simulate_effects_loc {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.binDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
         Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range} ${qtl_loc_bed}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
@@ -1147,7 +1117,7 @@ process simulate_effects_genome {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${workflow.projectDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${params.binDir}/bin/create_causal_QTLs.R > create_causal_QTLs.R
         Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
