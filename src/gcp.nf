@@ -297,7 +297,7 @@ workflow {
                 .spread(Channel.fromPath("${params.simulate_qtlloc}"))
                 .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps))
-                .combine(Channel.fromPath("${params.bin_dir}/create_causal_QTLs.R") | simulate_effects_loc
+                .combine(Channel.fromPath("${params.bin_dir}/create_causal_QTLs.R")) | simulate_effects_loc
 
             sim_phen_inputs = simulate_effects_loc.out
 
