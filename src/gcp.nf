@@ -203,7 +203,13 @@ workflow {
         pheno_strains
             .spread(traits_to_map)
             .spread(vcf.spread(vcf_index))
-            .spread(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
+            .spread(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files 
+        
+        prepare_gcta_files.out
+            .combine(Channel.fromPath("${params.bin_dir}/gcta64")) | gcta_grm 
+            
+        gcta_grm.out
+            .combine(Channel.fromPath("${params.bin_dir}/gcta64")) | gcta_lmm_exact_mapping
 
         // process GWAS mapping
         traits_to_map
@@ -242,7 +248,8 @@ workflow {
             .combine(ann_file)
             .combine(Channel.fromPath("${params.genes}"))
             .combine(Channel.fromPath("${params.bin_dir}/Finemap_QTL_Intervals.R"))
-            .combine(Channel.fromPath("${params.bin_dir}/plot_genes.R")) | gcta_fine_maps
+            .combine(Channel.fromPath("${params.bin_dir}/plot_genes.R"))
+            .combine(Channel.fromPath("${params.bin_dir}/gcta64")) | gcta_fine_maps
 
         // divergent regions and haplotypes
         peaks
@@ -314,7 +321,8 @@ workflow {
         }
 
         sim_phen_inputs
-            .spread(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
+            .spread(Channel.fromPath("${params.simulate_h2}").splitCsv())
+            .combine(Channel.fromPath("${params.bin_dir}/gcta64")) | simulate_map_phenotypes
 
         // simulation mappings
         simulate_map_phenotypes.out.gcta_intervals
@@ -604,7 +612,7 @@ process gcta_grm {
     cpus 4
 
     input:
-        tuple val(TRAIT), file(traits), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log)
+        tuple val(TRAIT), file(traits), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log), file(gcta64)
 
     output:
         tuple val(TRAIT), file(traits), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log), file("${TRAIT}_gcta_grm.grm.bin"), file("${TRAIT}_gcta_grm.grm.id"), file("${TRAIT}_gcta_grm.grm.N.bin"), file("${TRAIT}_heritability.hsq"), file("${TRAIT}_heritability.log"), file("${TRAIT}_gcta_grm_inbred.grm.bin"), file("${TRAIT}_gcta_grm_inbred.grm.id"), file("${TRAIT}_gcta_grm_inbred.grm.N.bin"), file("${TRAIT}_heritability_inbred.hsq"), file("${TRAIT}_heritability_inbred.log")
@@ -614,11 +622,14 @@ process gcta_grm {
 
     """
 
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 10
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 10
+    cat ${gcta64} >  gcta64_
+    chmod +x gcta64_
 
-    gcta64 --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 10
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 10
+    ./gcta64_ --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 10
+    ./gcta64_ --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 10
+
+    ./gcta64_ --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 10
+    ./gcta64_ --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 10
 
     """
 }
@@ -637,24 +648,26 @@ process gcta_lmm_exact_mapping {
     tuple val(TRAIT), file(traits), file(bed), file(bim), file(fam), file(map), \
     file(nosex), file(ped), file(log), file(grm_bin), file(grm_id), file(grm_nbin), \
     file(h2), file(h2log), file(grm_bin_inbred), file(grm_id_inbred), file(grm_nbin_inbred), \
-    file(h2_inbred), file(h2log_inbred)
+    file(h2_inbred), file(h2log_inbred), file(gcta64)
 
     output:
     tuple val(TRAIT), file("${TRAIT}_lmm-exact_inbred.fastGWA"), file("${TRAIT}_lmm-exact.loco.mlma")
 
 
     """
+    cat ${gcta64} >  gcta64_
+    chmod +x gcta64_
 
-    gcta64 --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm
-    gcta64 --mlma-loco \\
+    gcta64_ --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm
+    gcta64_ --mlma-loco \\
         --grm ${TRAIT}_sparse_grm \\
         --bfile ${TRAIT} \\
         --out ${TRAIT}_lmm-exact \\
         --pheno ${traits} \\
         --maf ${params.maf}
 
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred
-    gcta64 --fastGWA-lmm-exact \\
+    gcta64_ --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred
+    gcta64_ --fastGWA-lmm-exact \\
         --grm-sparse ${TRAIT}_sparse_grm \\
         --bfile ${TRAIT} \\
         --out ${TRAIT}_lmm-exact_inbred \\
@@ -851,7 +864,7 @@ process gcta_fine_maps {
     //errorStrategy 'ignore'
 
     input:
-        tuple val(TRAIT), file(pheno), file(ROI_geno), file(ROI_LD), file(bim), file(bed), file(fam), file(annotation), file(genefile), file(finemap_qtl_intervals), file(plot_genes)
+        tuple val(TRAIT), file(pheno), file(ROI_geno), file(ROI_LD), file(bim), file(bed), file(fam), file(annotation), file(genefile), file(finemap_qtl_intervals), file(plot_genes), file(gcta64)
 
     output:
         tuple file("*.fastGWA"), val(TRAIT), file("*.prLD_df.tsv"), file("*.pdf"), file("*_genes.tsv")
@@ -859,6 +872,8 @@ process gcta_fine_maps {
         tuple file("*_genes.tsv"), val(TRAIT), emit: finemap_done
 
     """
+    cat ${gcta64} > gcta64_
+    chmod +x gcta64_
 
     tail -n +2 ${pheno} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_finemap_traits.tsv
 
@@ -869,9 +884,9 @@ process gcta_fine_maps {
         start=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f1 -d "-"`
         stop=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f2 -d "-"`
 
-        gcta64 --bfile ${TRAIT}.\$chr.\$start.\$stop --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred --thread-num 10
-        gcta64 --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred
-        gcta64 --fastGWA-lmm-exact \\
+        ./gcta64_ --bfile ${TRAIT}.\$chr.\$start.\$stop --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred --thread-num 10
+        ./gcta64_ --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred
+        ./gcta64_ --fastGWA-lmm-exact \\
         --grm-sparse ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred \\
         --bfile ${TRAIT}.\$chr.\$start.\$stop  \\
         --out ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred \\
@@ -1161,7 +1176,7 @@ process simulate_map_phenotypes {
     errorStrategy 'ignore'
 
     input:
-        tuple val(strain_set), val(strains), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log), file(gm), val(MAF), file(n_indep_tests), val(NQTL), val(SIMREP), val(effect_range), file(loci), val(H2)
+        tuple val(strain_set), val(strains), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log), file(gm), val(MAF), file(n_indep_tests), val(NQTL), val(SIMREP), val(effect_range), file(loci), val(H2), file(gcta64)
 
     output:
         tuple file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.bed"), file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.bim"), file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.fam"), file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.map"), file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.nosex"), file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.ped"), file("TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set}.log"), val(NQTL), val(SIMREP), file(loci), file("${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen"), file("${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.par"), emit: sim_phen_output
@@ -1173,8 +1188,10 @@ process simulate_map_phenotypes {
         tuple val(strain_set), val(strains), val(NQTL), val(SIMREP), val(H2), file(loci), file(gm), val(effect_range), file(n_indep_tests), val(MAF), file("${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact_inbred.fastGWA"), file("${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact.loco.mlma"), file("${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen"), emit: gcta_intervals
 
     """
+    cat ${gcta64} > gcta64_
+    chmod +x gcta64_
 
-    gcta64 --bfile TO_SIMS \\
+    ./gcta64_ --bfile TO_SIMS \\
          --simu-qt \\
          --simu-causal-loci ${loci} \\
          --simu-hsq ${H2} \\
@@ -1193,10 +1210,10 @@ process simulate_map_phenotypes {
         --allow-extra-chr \\
         --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen
 
-    gcta64 --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} --autosome --maf ${MAF} --make-grm --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm --thread-num 10
-    gcta64 --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} --autosome --maf ${MAF} --make-grm-inbred --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --thread-num 10
+    ./gcta64_ --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} --autosome --maf ${MAF} --make-grm --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm --thread-num 10
+    ./gcta64_ --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} --autosome --maf ${MAF} --make-grm-inbred --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --thread-num 10
 
-    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen --reml --out check_vp --thread-num 10
+    ./gcta64_ --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen --reml --out check_vp --thread-num 10
     vp=`grep Vp check_vp.hsq | head -1 | cut -f2`
     if (( \$(echo "0.00001 > \$vp" |bc -l) ));
     then
@@ -1207,16 +1224,16 @@ process simulate_map_phenotypes {
 
 
 
-    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm
-    gcta64 --mlma-loco \\
+    ./gcta64_ --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm
+    ./gcta64_ --mlma-loco \\
         --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
         --grm ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm \\
         --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact \\
         --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen \\
         --maf ${MAF}
 
-    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred
-    gcta64 --fastGWA-lmm-exact \\
+    ./gcta64_ --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred
+    ./gcta64_ --fastGWA-lmm-exact \\
         --grm-sparse ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred \\
         --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
         --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact_inbred \\
