@@ -354,9 +354,9 @@ process update_annotations {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${update_annotations} > update_annotations.R
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${update_annotations} > update_annotations_.R
 
-        Rscript --vanilla update_annotations.R ${params.wbb} ${params.species} ${gtf_to_refflat}
+        Rscript --vanilla update_annotations_.R ${params.wbb} ${params.species} ${gtf_to_refflat}
     """
 
 }   
@@ -394,9 +394,9 @@ process fix_strain_names_bulk {
         file("strain_issues.txt")
 
     """
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${fix_isotype_names_bulk} > Fix_Isotype_names_bulk.R 
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${fix_isotype_names_bulk} > Fix_Isotype_names_bulk_.R 
 
-        Rscript --vanilla Fix_Isotype_names_bulk.R ${phenotypes} fix $isotype_lookup
+        Rscript --vanilla Fix_Isotype_names_bulk_.R ${phenotypes} fix $isotype_lookup
     """
 
 }
@@ -506,8 +506,8 @@ process chrom_eigen_variants {
         cat Genotype_Matrix.tsv |\\
         awk -v chrom="${CHROM}" '{if(\$1 == "CHROM" || \$1 == chrom) print}' > ${CHROM}_gm.tsv
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${get_genomatrix_eigen} > Get_GenoMatrix_Eigen.R
-        Rscript --vanilla Get_GenoMatrix_Eigen.R ${CHROM}_gm.tsv ${CHROM}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${get_genomatrix_eigen} > Get_GenoMatrix_Eigen_.R
+        Rscript --vanilla Get_GenoMatrix_Eigen_.R ${CHROM}_gm.tsv ${CHROM}
     """
 
 }
@@ -683,11 +683,11 @@ process gcta_intervals_maps {
         path "*AGGREGATE_qtl_region.tsv", emit: qtl_peaks
 
     """
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${aggregate_mappings} > Aggregate_Mappings.R
-    Rscript --vanilla Aggregate_Mappings.R ${lmmexact_loco} ${lmmexact_inbred}
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${aggregate_mappings} > Aggregate_Mappings_.R
+    Rscript --vanilla Aggregate_Mappings_.R ${lmmexact_loco} ${lmmexact_inbred}
 
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_aggregate_intervals_maps} > Find_Aggregate_Intervals_Maps.R
-    Rscript --vanilla Find_Aggregate_Intervals_Maps.R ${geno} ${pheno} temp.aggregate.mapping.tsv ${tests} ${qtl_grouping_size} ${qtl_ci_size} ${sig_thresh} ${TRAIT}_AGGREGATE
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_aggregate_intervals_maps} > Find_Aggregate_Intervals_Maps_.R
+    Rscript --vanilla Find_Aggregate_Intervals_Maps_.R ${geno} ${pheno} temp.aggregate.mapping.tsv ${tests} ${qtl_grouping_size} ${qtl_ci_size} ${sig_thresh} ${TRAIT}_AGGREGATE
 
     """
 }
@@ -708,8 +708,8 @@ process generate_plots {
         file("*.png")
 
     """
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${pipeline_plotting_mod} > pipeline.plotting.mod.R
-    Rscript --vanilla pipeline.plotting.mod.R ${aggregate_mapping} ${tests}
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${pipeline_plotting_mod} > pipeline.plotting.mod_.R
+    Rscript --vanilla pipeline.plotting.mod_.R ${aggregate_mapping} ${tests}
 
     """
 }
@@ -727,8 +727,8 @@ process LD_between_regions {
         val TRAIT, emit: linkage_done
 
   """
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${ld_between_regions} > LD_between_regions.R 
-    Rscript --vanilla LD_between_regions.R ${geno} ${aggregate_mapping} ${TRAIT}
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${ld_between_regions} > LD_between_regions_.R 
+    Rscript --vanilla LD_between_regions_.R ${geno} ${aggregate_mapping} ${TRAIT}
   """
 }
 
@@ -878,11 +878,11 @@ process gcta_fine_maps {
         --pheno plink_finemap_traits.tsv \\
         --maf ${params.maf}
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat -  ${finemap_qtl_intervals} > Finemap_QTL_Intervals.R 
-        Rscript --vanilla Finemap_QTL_Intervals.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat -  ${finemap_qtl_intervals} > Finemap_QTL_Intervals_.R 
+        Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes.R 
-        Rscript --vanilla plot_genes.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R 
+        Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
 
         done
 
@@ -1064,8 +1064,8 @@ process chrom_eigen_variants_sims {
         awk -v chrom="${CHROM}" '{if(\$1 == "CHROM" || \$1 == chrom) print}' > ${CHROM}_gm.tsv
 
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${get_genomatrix_eigen} > Get_GenoMatrix_Eigen.R
-        Rscript --vanilla Get_GenoMatrix_Eigen.R ${CHROM}_gm.tsv ${CHROM}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${get_genomatrix_eigen} > Get_GenoMatrix_Eigen_.R
+        Rscript --vanilla Get_GenoMatrix_Eigen_.R ${CHROM}_gm.tsv ${CHROM}
 
         mv ${CHROM}_independent_snvs.csv ${CHROM}_${strain_set}_${MAF}_independent_snvs.csv
     """
@@ -1114,8 +1114,8 @@ process simulate_effects_loc {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${create_causal_qtls} > create_causal_QTLs.R
-        Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range} ${qtl_loc_bed}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${create_causal_qtls} > create_causal_QTLs_.R
+        Rscript --vanilla create_causal_QTLs_.R ${bim} ${NQTL} ${effect_range} ${qtl_loc_bed}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
 
@@ -1138,8 +1138,8 @@ process simulate_effects_genome {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${create_causal_qtls} > create_causal_QTLs.R
-        Rscript --vanilla create_causal_QTLs.R ${bim} ${NQTL} ${effect_range}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${create_causal_qtls} > create_causal_QTLs_.R
+        Rscript --vanilla create_causal_QTLs_.R ${bim} ${NQTL} ${effect_range}
 
         mv causal.variants.sim.${NQTL}.txt causal.variants.sim.${NQTL}.${SIMREP}.txt
 
@@ -1247,17 +1247,17 @@ process get_gcta_intervals {
 
     """
         # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${aggregate_mappings} > Aggregate_Mappings.R
-        Rscript --vanilla Aggregate_Mappings.R ${lmmexact_loco} ${lmmexact_inbred}
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${aggregate_mappings} > Aggregate_Mappings_.R
+        Rscript --vanilla Aggregate_Mappings_.R ${lmmexact_loco} ${lmmexact_inbred}
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_aggregate_intervals} > Find_Aggregate_Intervals.R
-        Rscript --vanilla Find_Aggregate_Intervals.R ${gm} ${phenotypes} temp.aggregate.mapping.tsv ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} aggregate
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_aggregate_intervals} > Find_Aggregate_Intervals_.R
+        Rscript --vanilla Find_Aggregate_Intervals_.R ${gm} ${phenotypes} temp.aggregate.mapping.tsv ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} aggregate
         
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_gcta_intervals} > Find_GCTA_Intervals.R
-        Rscript --vanilla Find_GCTA_Intervals.R ${gm} ${phenotypes} ${lmmexact_inbred} ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} LMM-EXACT-INBRED
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_gcta_intervals} > Find_GCTA_Intervals_.R
+        Rscript --vanilla Find_GCTA_Intervals_.R ${gm} ${phenotypes} ${lmmexact_inbred} ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} LMM-EXACT-INBRED
         
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_gcta_intervals_loco} > Find_GCTA_Intervals_LOCO.R
-        Rscript --vanilla Find_GCTA_Intervals_LOCO.R ${gm} ${phenotypes} ${lmmexact_loco} ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} LMM-EXACT-LOCO
+        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_gcta_intervals_loco} > Find_GCTA_Intervals_LOCO_.R
+        Rscript --vanilla Find_GCTA_Intervals_LOCO_.R ${gm} ${phenotypes} ${lmmexact_loco} ${n_indep_tests} ${NQTL} ${SIMREP} ${QTL_GROUP_SIZE} ${QTL_CI_SIZE} ${H2} ${params.maf} ${THRESHOLD} ${strain_set} ${MAF} ${effect_range} LMM-EXACT-LOCO
 
     """
 }
@@ -1400,7 +1400,7 @@ process sim_fine_maps {
 
 workflow.onComplete {
 
-    summary = """
+    summary = '''
 
     Pipeline execution summary
     ---------------------------
@@ -1432,7 +1432,7 @@ workflow.onComplete {
     Annotation                              = ${params.annotate}
     Result Directory                        = ${params.out}
 
-    """
+    '''
 
     println summary
 
