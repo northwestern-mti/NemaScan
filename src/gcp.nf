@@ -255,7 +255,9 @@ workflow {
         peaks
             .spread(traits_to_map)
             .combine(divergent_and_haplotype.out.div_done)
-            .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true) //| html_report_main
+            .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true)
+            .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_main.Rmd"))
+            .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_region_template.Rmd")) | html_report_main
 
     } else if(params.annotate) {
 
@@ -860,6 +862,9 @@ process gcta_fine_maps {
 
     """
 
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${finemap_qtl_intervals} > Finemap_QTL_Intervals_.R
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R
+
     tail -n +2 ${pheno} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_finemap_traits.tsv
 
     for i in *ROI_Genotype_Matrix.tsv;
@@ -878,10 +883,7 @@ process gcta_fine_maps {
         --pheno plink_finemap_traits.tsv \\
         --maf ${params.maf}
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat -  ${finemap_qtl_intervals} > Finemap_QTL_Intervals_.R 
         Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
-
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R 
         Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
 
         done
@@ -939,20 +941,20 @@ process html_report_main {
 
 
   input:
-    tuple val(TRAIT), file("QTL_peaks.tsv"), file(pheno), val(div_done), file("genes.tsv")
+    tuple val(TRAIT), file("QTL_peaks.tsv"), file(pheno), val(div_done), file("genes.tsv"), file(ns_report_md), file(ns_report_template_md)
 
   output:
     tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html")
 
 
   """
-    cat `which NemaScan_Report_main.Rmd` | sed "s/TRAIT_NAME_HOLDER/${TRAIT}/g" > NemaScan_Report_${TRAIT}_main.Rmd 
-    cat `which NemaScan_Report_region_template.Rmd` > NemaScan_Report_region_template.Rmd 
+    cat ${ns_report_md} | sed "s/TRAIT_NAME_HOLDER/${TRAIT}/g" > NemaScan_Report_${TRAIT}_main.Rmd 
+    cat ${ns_report_template_md} > NemaScan_Report_region_template_.Rmd 
 
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" > .Rprofile
 
     # probably need to change root dir...
-    # Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='gs://nf-pipeline/output/NemaScan-20210505/')"
+    Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${params.out}')"
 
   """
 }
