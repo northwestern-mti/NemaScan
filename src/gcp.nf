@@ -418,9 +418,8 @@ process vcf_to_geno_matrix {
 
     //executor 'local'
 
+    machineType 'c2-standard-4'
     publishDir "${params.out}/Genotype_Matrix", mode: 'copy'
-
-    cpus 1
 
     input:
         tuple file(vcf), file(index), file(strains)
@@ -431,7 +430,7 @@ process vcf_to_geno_matrix {
     """
 
         bcftools view -S ${strains} ${vcf} |\\
-        bcftools filter -i N_MISSING=0 -Oz -o Phenotyped_Strain_VCF.vcf.gz
+        bcftools filter -i N_MISSING=0 -Oz --threads 4 -o Phenotyped_Strain_VCF.vcf.gz
 
         tabix -p vcf Phenotyped_Strain_VCF.vcf.gz
 
@@ -569,11 +568,12 @@ process prepare_gcta_files {
 
     bcftools annotate --rename-chrs ${num_chroms} ${vcf} |\\
     bcftools view -S ${strains} |\\
-    bcftools filter -i N_MISSING=0 -Oz -o renamed_chroms.vcf.gz
+    bcftools filter -i N_MISSING=0 -Oz --threads 4 -o renamed_chroms.vcf.gz
 
     tabix -p vcf renamed_chroms.vcf.gz
 
     plink --vcf renamed_chroms.vcf.gz \\
+    --threads 4 \\
     --snps-only \\
     --biallelic-only \\
     --maf 0.05 \\
@@ -586,6 +586,7 @@ process prepare_gcta_files {
     tail -n +2 ${traits} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_formated_trats.tsv
 
     plink --vcf renamed_chroms.vcf.gz \\
+    --threads 4 \\
     --make-bed \\
     --snps-only \\
     --biallelic-only \\
@@ -616,11 +617,11 @@ process gcta_grm {
 
     """
 
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 10
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 10
+    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 4
+    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 4
 
-    gcta64 --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 10
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 10
+    gcta64 --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 4
+    gcta64 --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 4
 
     """
 }
@@ -647,16 +648,18 @@ process gcta_lmm_exact_mapping {
 
     """
 
-    gcta64 --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm
+    gcta64 --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm --thread-num 4
     gcta64 --mlma-loco \\
+        --thread-num 4 \\
         --grm ${TRAIT}_sparse_grm \\
         --bfile ${TRAIT} \\
         --out ${TRAIT}_lmm-exact \\
         --pheno ${traits} \\
         --maf ${params.maf}
 
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred
+    gcta64 --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred --thread-num 4
     gcta64 --fastGWA-lmm-exact \\
+        --thread-num 4 \\
         --grm-sparse ${TRAIT}_sparse_grm \\
         --bfile ${TRAIT} \\
         --out ${TRAIT}_lmm-exact_inbred \\
@@ -670,10 +673,11 @@ process gcta_lmm_exact_mapping {
 
 process gcta_intervals_maps {
 
+    machineType 'n1-highmem-8'
+
     publishDir "${params.out}/Mapping/Processed", mode: 'copy', pattern: "*AGGREGATE_mapping.tsv"
     publishDir "${params.out}/Mapping/Processed", mode: 'copy', pattern: "*AGGREGATE_qtl_region.tsv" //would be nice to put all these files per trait into one file
 
-    memory '48 GB'
 
     input:
         tuple val(TRAIT), file(pheno), file(tests), file(geno), val(P3D), val(sig_thresh), \
@@ -686,9 +690,9 @@ process gcta_intervals_maps {
 
     """
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${aggregate_mappings} > Aggregate_Mappings_.R
-    Rscript --vanilla Aggregate_Mappings_.R ${lmmexact_loco} ${lmmexact_inbred}
-
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_aggregate_intervals_maps} > Find_Aggregate_Intervals_Maps_.R
+
+    Rscript --vanilla Aggregate_Mappings_.R ${lmmexact_loco} ${lmmexact_inbred}
     Rscript --vanilla Find_Aggregate_Intervals_Maps_.R ${geno} ${pheno} temp.aggregate.mapping.tsv ${tests} ${qtl_grouping_size} ${qtl_ci_size} ${sig_thresh} ${TRAIT}_AGGREGATE
 
     """
@@ -844,7 +848,7 @@ process prep_ld_files {
 
 process gcta_fine_maps {
     machineType 'n1-highmem-8'
-    
+
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*.fastGWA"
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*_genes.tsv"
     publishDir "${params.out}/Fine_Mappings/Plots", mode: 'copy', pattern: "*.pdf"
@@ -873,14 +877,25 @@ process gcta_fine_maps {
         start=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f1 -d "-"`
         stop=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f2 -d "-"`
 
-        gcta64 --bfile ${TRAIT}.\$chr.\$start.\$stop --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred --thread-num 10
-        gcta64 --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred
+        gcta64 --bfile ${TRAIT}.\$chr.\$start.\$stop \\
+        --autosome \\
+        --maf 0.05 \\
+        --make-grm-inbred \\
+        --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
+        --thread-num 8
+
+        gcta64 --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
+        --make-bK-sparse ${params.sparse_cut} \\
+        --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred  \\
+        --thread-num 8
+
         gcta64 --fastGWA-lmm-exact \\
         --grm-sparse ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred \\
         --bfile ${TRAIT}.\$chr.\$start.\$stop  \\
         --out ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred \\
         --pheno plink_finemap_traits.tsv \\
-        --maf ${params.maf}
+        --maf ${params.maf} \\
+        --thread-num 8
         
         Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
         Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
