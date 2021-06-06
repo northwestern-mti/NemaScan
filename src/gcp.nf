@@ -843,12 +843,12 @@ process prep_ld_files {
 
 
 process gcta_fine_maps {
-
+    machineType 'n1-highmem-8'
+    
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*.fastGWA"
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*_genes.tsv"
     publishDir "${params.out}/Fine_Mappings/Plots", mode: 'copy', pattern: "*.pdf"
 
-    memory '48 GB'
     
     //errorStrategy 'ignore'
 
@@ -863,6 +863,8 @@ process gcta_fine_maps {
     """
 
     tail -n +2 ${pheno} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_finemap_traits.tsv
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${finemap_qtl_intervals} > Finemap_QTL_Intervals_.R
+    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R
 
     for i in *ROI_Genotype_Matrix.tsv;
         do
@@ -880,10 +882,7 @@ process gcta_fine_maps {
         --pheno plink_finemap_traits.tsv \\
         --maf ${params.maf}
         
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${finemap_qtl_intervals} > Finemap_QTL_Intervals_.R
         Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
-
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R
         Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
 
         done
