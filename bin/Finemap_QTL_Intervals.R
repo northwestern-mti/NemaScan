@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
-library(tidyverse)
-library(data.table)
-library(RColorBrewer)
+suppressPackageStartupMessages(library(tidyverse))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressPackageStartupMessages(library(RColorBrewer))
 
 args <- commandArgs(trailingOnly = TRUE)
 
