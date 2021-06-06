@@ -6,7 +6,7 @@ if( !nextflow.version.matches('>20.0') ) {
     exit 1
 }
 
-nextflow.preview.dsl=2
+nextflow.enable.dsl=2
 
 date = new Date().format( 'yyyyMMdd' )
 
@@ -190,7 +190,7 @@ workflow {
         // Genotype matrix
         pheno_strains = fix_strain_names_bulk.out.phenotyped_strains_to_analyze
 
-        vcf.spread(vcf_index)
+        vcf.combine(vcf_index)
                 .combine(pheno_strains) | vcf_to_geno_matrix
 
         // EIGEN
@@ -201,14 +201,14 @@ workflow {
 
         // GWAS mapping
         pheno_strains
-            .spread(traits_to_map)
-            .spread(vcf.spread(vcf_index))
-            .spread(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
+            .combine(traits_to_map)
+            .combine(vcf.combine(vcf_index))
+            .combine(Channel.fromPath("${params.numeric_chrom}")) | prepare_gcta_files | gcta_grm | gcta_lmm_exact_mapping
 
         // process GWAS mapping
         traits_to_map
-            .spread(collect_eigen_variants.out)
-            .spread(vcf_to_geno_matrix.out)
+            .combine(collect_eigen_variants.out)
+            .combine(vcf_to_geno_matrix.out)
             .combine(Channel.from("${params.p3d}"))
             .combine(Channel.from("${params.sthresh}"))
             .combine(Channel.from("${params.group_qtl}"))
@@ -233,9 +233,9 @@ workflow {
         peaks
             .splitCsv(sep: '\t', skip: 1)
             .join(generate_plots.out.maps_from_plot, by: 2)
-            .spread(impute_vcf.spread(impute_vcf_index))
-            .spread(pheno_strains)
-            .spread(Channel.fromPath("${params.numeric_chrom}")) | prep_ld_files
+            .combine(impute_vcf.combine(impute_vcf_index))
+            .combine(pheno_strains)
+            .combine(Channel.fromPath("${params.numeric_chrom}")) | prep_ld_files
 
         //fine mapping
         prep_ld_files.out.finemap_preps
@@ -253,7 +253,7 @@ workflow {
 
         // generate main html report
         peaks
-            .spread(traits_to_map)
+            .combine(traits_to_map)
             .combine(divergent_and_haplotype.out.div_done)
             .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true)
             .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_main.Rmd"))
@@ -278,9 +278,9 @@ workflow {
 
         Channel.from(pop_file.collect { it.tokenize( ' ' ) })
             .map { SM, STRAINS -> [SM, STRAINS] }
-            .spread(vcf.spread(vcf_index))
-            .spread(Channel.fromPath("${params.numeric_chrom}"))
-            .spread(Channel.fromPath("${params.simulate_maf}").splitCsv()) | prepare_simulation_files
+            .combine(vcf.combine(vcf_index))
+            .combine(Channel.fromPath("${params.numeric_chrom}"))
+            .combine(Channel.fromPath("${params.simulate_maf}").splitCsv()) | prepare_simulation_files
 
         // eigen
         contigs = Channel.from(["1", "2", "3", "4", "5", "6"])
@@ -295,9 +295,9 @@ workflow {
         if(params.simulate_qtlloc){
 
             collect_eigen_variants_sims.out
-                .spread(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
-                .spread(Channel.fromPath("${params.simulate_qtlloc}"))
-                .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_qtlloc}"))
+                .combine(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps))
                 .combine(Channel.fromPath("${params.bin_dir}/create_causal_QTLs.R")) | simulate_effects_loc
 
@@ -306,8 +306,8 @@ workflow {
         } else {
 
             collect_eigen_variants_sims.out
-                .spread(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
-                .spread(Channel.fromPath("${params.simulate_eff}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_nqtl}").splitCsv())
+                .combine(Channel.fromPath("${params.simulate_eff}").splitCsv())
                 .combine(Channel.from(1..params.simulate_reps))
                 .combine(Channel.fromPath("${params.bin_dir}/create_causal_QTLs.R")) | simulate_effects_genome
 
@@ -316,13 +316,13 @@ workflow {
         }
 
         sim_phen_inputs
-            .spread(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
+            .combine(Channel.fromPath("${params.simulate_h2}").splitCsv()) | simulate_map_phenotypes
 
         // simulation mappings
         simulate_map_phenotypes.out.gcta_intervals
-            .spread(Channel.from("${params.sthresh}"))
-            .spread(Channel.from("${params.group_qtl}"))
-            .spread(Channel.from("${params.ci_size}")) 
+            .combine(Channel.from("${params.sthresh}"))
+            .combine(Channel.from("${params.group_qtl}"))
+            .combine(Channel.from("${params.ci_size}")) 
             .combine(Channel.fromPath("${params.bin_dir}/Aggregate_Mappings.R"))
             .combine(Channel.fromPath("${params.bin_dir}/Find_Aggregate_Intervals.R"))
             .combine(Channel.fromPath("${params.bin_dir}/Find_GCTA_Intervals.R"))
@@ -418,7 +418,7 @@ process vcf_to_geno_matrix {
 
     //executor 'local'
 
-    machineType 'c2-standard-4'
+    machineType 'n1-standard-4'
     publishDir "${params.out}/Genotype_Matrix", mode: 'copy'
 
     input:
@@ -430,11 +430,12 @@ process vcf_to_geno_matrix {
     """
 
         bcftools view -S ${strains} ${vcf} |\\
-        bcftools filter -i N_MISSING=0 -Oz --threads 4 -o Phenotyped_Strain_VCF.vcf.gz
+        bcftools filter -i N_MISSING=0 -Oz --threads 5 -o Phenotyped_Strain_VCF.vcf.gz
 
         tabix -p vcf Phenotyped_Strain_VCF.vcf.gz
 
         plink --vcf Phenotyped_Strain_VCF.vcf.gz \\
+            --threads 5 \\
             --snps-only \\
             --biallelic-only \\
             --maf 0.05 \\
@@ -521,9 +522,9 @@ process collect_eigen_variants {
 
     //executor 'local'
 
-    publishDir "${params.out}/Genotype_Matrix", mode: 'copy'
+    machineType 'n1-standard-1'
 
-    cpus 1
+    publishDir "${params.out}/Genotype_Matrix", mode: 'copy'
 
     input:
         file(chrom_tests) //from sig_snps_geno_matrix.collect()
@@ -556,7 +557,7 @@ process collect_eigen_variants {
 
 process prepare_gcta_files {
 
-    cpus 4
+    machineType 'n1-standard-4'
 
     input:
         tuple file(strains), val(TRAIT), file(traits), file(vcf), file(index), file(num_chroms)
@@ -568,12 +569,12 @@ process prepare_gcta_files {
 
     bcftools annotate --rename-chrs ${num_chroms} ${vcf} |\\
     bcftools view -S ${strains} |\\
-    bcftools filter -i N_MISSING=0 -Oz --threads 4 -o renamed_chroms.vcf.gz
+    bcftools filter -i N_MISSING=0 -Oz --threads 5 -o renamed_chroms.vcf.gz
 
     tabix -p vcf renamed_chroms.vcf.gz
 
     plink --vcf renamed_chroms.vcf.gz \\
-    --threads 4 \\
+    --threads 5 \\
     --snps-only \\
     --biallelic-only \\
     --maf 0.05 \\
@@ -586,7 +587,7 @@ process prepare_gcta_files {
     tail -n +2 ${traits} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_formated_trats.tsv
 
     plink --vcf renamed_chroms.vcf.gz \\
-    --threads 4 \\
+    --threads 5 \\
     --make-bed \\
     --snps-only \\
     --biallelic-only \\
@@ -604,7 +605,7 @@ process prepare_gcta_files {
 
 process gcta_grm {
 
-    cpus 4
+    machineType 'n1-standard-4'
 
     input:
         tuple val(TRAIT), file(traits), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log)
@@ -617,11 +618,11 @@ process gcta_grm {
 
     """
 
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 4
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 4
+    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 5
+    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 5
 
-    gcta64 --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 4
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 4
+    gcta64 --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 5
+    gcta64 --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 5
 
     """
 }
@@ -629,7 +630,7 @@ process gcta_grm {
 
 process gcta_lmm_exact_mapping {
 
-    cpus 4
+    machineType 'n1-standard-4'
 
     publishDir "${params.out}/Mapping/Raw", pattern: "*fastGWA", overwrite: true
     publishDir "${params.out}/Mapping/Raw", pattern: "*loco.mlma", overwrite: true
@@ -648,18 +649,18 @@ process gcta_lmm_exact_mapping {
 
     """
 
-    gcta64 --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm --thread-num 4
+    gcta64 --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm --thread-num 5
     gcta64 --mlma-loco \\
-        --thread-num 4 \\
+        --thread-num 5 \\
         --grm ${TRAIT}_sparse_grm \\
         --bfile ${TRAIT} \\
         --out ${TRAIT}_lmm-exact \\
         --pheno ${traits} \\
         --maf ${params.maf}
 
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred --thread-num 4
+    gcta64 --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred --thread-num 5
     gcta64 --fastGWA-lmm-exact \\
-        --thread-num 4 \\
+        --thread-num 5 \\
         --grm-sparse ${TRAIT}_sparse_grm \\
         --bfile ${TRAIT} \\
         --out ${TRAIT}_lmm-exact_inbred \\
@@ -882,12 +883,12 @@ process gcta_fine_maps {
         --maf 0.05 \\
         --make-grm-inbred \\
         --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
-        --thread-num 8
+        --thread-num 9
 
         gcta64 --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
         --make-bK-sparse ${params.sparse_cut} \\
         --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred  \\
-        --thread-num 8
+        --thread-num 9
 
         gcta64 --fastGWA-lmm-exact \\
         --grm-sparse ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred \\
@@ -895,7 +896,7 @@ process gcta_fine_maps {
         --out ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred \\
         --pheno plink_finemap_traits.tsv \\
         --maf ${params.maf} \\
-        --thread-num 8
+        --thread-num 9
         
         Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
         Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
@@ -1195,6 +1196,7 @@ process simulate_map_phenotypes {
          --simu-causal-loci ${loci} \\
          --simu-hsq ${H2} \\
          --simu-rep 1 \\
+         --thread-num 5 \\
          --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims
 
     plink --bfile TO_SIMS \\
@@ -1209,35 +1211,55 @@ process simulate_map_phenotypes {
         --allow-extra-chr \\
         --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen
 
-    gcta64 --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} --autosome --maf ${MAF} --make-grm --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm --thread-num 10
-    gcta64 --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} --autosome --maf ${MAF} --make-grm-inbred --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --thread-num 10
+    gcta64 --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
+            --autosome --maf ${MAF} --make-grm \\
+            --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm \\
+            --thread-num 5
 
-    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen --reml --out check_vp --thread-num 10
+    gcta64 --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
+            --autosome --maf ${MAF} --make-grm-inbred \\
+            --out TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred \\
+            --thread-num 5
+
+    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred \\
+            --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen \\
+            --reml --out check_vp \\
+            --thread-num 5
+
     vp=`grep Vp check_vp.hsq | head -1 | cut -f2`
     if (( \$(echo "0.00001 > \$vp" |bc -l) ));
-    then
-    awk '{print \$1, \$2, \$3*1000}' ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen > temp.phen;
-    rm ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen
-    mv temp.phen ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen
+      then
+        awk '{print \$1, \$2, \$3*1000}' ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen > temp.phen;
+        rm ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen
+        mv temp.phen ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen
     fi
 
 
+    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm \\
+           --make-bK-sparse ${params.sparse_cut} \\
+           --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm \\
+           --thread-num 5
 
-    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm
     gcta64 --mlma-loco \\
-        --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
-        --grm ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm \\
-        --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact \\
-        --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen \\
-        --maf ${MAF}
+           --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
+           --grm ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm \\
+           --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact \\
+           --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen \\
+           --maf ${MAF} \\
+           --thread-num 5
 
-    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred
+    gcta64 --grm TO_SIMS_${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_gcta_grm_inbred \\
+          --make-bK-sparse ${params.sparse_cut} \\
+          --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred
+          --thread-num 5
+
     gcta64 --fastGWA-lmm-exact \\
-        --grm-sparse ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred \\
-        --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
-        --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact_inbred \\
-        --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen \\
-        --maf ${MAF}
+          --grm-sparse ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sparse_grm_inbred \\
+          --bfile TO_SIMS_${NQTL}_${SIMREP}_${MAF}_${effect_range}_${strain_set} \\
+          --out ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_lmm-exact_inbred \\
+          --pheno ${NQTL}_${SIMREP}_${H2}_${MAF}_${effect_range}_${strain_set}_sims.phen \\
+          --maf ${MAF}\\
+          --thread-num 5
 
     """
 }
