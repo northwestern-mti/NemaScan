@@ -381,6 +381,7 @@ THIS WILL NEED TO BE UPDATED TO HANDLE OTHER SPECIES
 process fix_strain_names_bulk {
 
     //executor 'local'
+    machineType 'n1-standard-1'
 
     tag {"BULK TRAIT"}
 
@@ -419,6 +420,7 @@ process vcf_to_geno_matrix {
     //executor 'local'
 
     machineType 'n1-standard-4'
+
     publishDir "${params.out}/Genotype_Matrix", mode: 'copy'
 
     input:
@@ -435,14 +437,14 @@ process vcf_to_geno_matrix {
         tabix -p vcf Phenotyped_Strain_VCF.vcf.gz
 
         plink --vcf Phenotyped_Strain_VCF.vcf.gz \\
-            --threads 5 \\
-            --snps-only \\
-            --biallelic-only \\
-            --maf 0.05 \\
-            --set-missing-var-ids @:# \\
-            --indep-pairwise 50 10 0.8 \\
-            --geno \\
-            --allow-extra-chr
+              --threads 5 \\
+              --snps-only \\
+              --biallelic-only \\
+              --maf 0.05 \\
+              --set-missing-var-ids @:# \\
+              --indep-pairwise 50 10 0.8 \\
+              --geno \\
+              --allow-extra-chr
 
         awk -F":" '\$1=\$1' OFS="\\t" plink.prune.in | \\
         sort -k1,1d -k2,2n > markers.txt
@@ -574,38 +576,38 @@ process prepare_gcta_files {
     tabix -p vcf renamed_chroms.vcf.gz
 
     plink --vcf renamed_chroms.vcf.gz \\
-    --threads 5 \\
-    --snps-only \\
-    --biallelic-only \\
-    --maf 0.05 \\
-    --set-missing-var-ids @:# \\
-    --indep-pairwise 50 10 0.8 \\
-    --geno \\
-    --not-chr MtDNA \\
-    --allow-extra-chr
+          --threads 5 \\
+          --snps-only \\
+          --biallelic-only \\
+          --maf 0.05 \\
+          --set-missing-var-ids @:# \\
+          --indep-pairwise 50 10 0.8 \\
+          --geno \\
+          --not-chr MtDNA \\
+          --allow-extra-chr
 
     tail -n +2 ${traits} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_formated_trats.tsv
 
     plink --vcf renamed_chroms.vcf.gz \\
-    --threads 5 \\
-    --make-bed \\
-    --snps-only \\
-    --biallelic-only \\
-    --maf 0.05 \\
-    --set-missing-var-ids @:# \\
-    --extract plink.prune.in \\
-    --geno \\
-    --recode \\
-    --out ${TRAIT} \\
-    --allow-extra-chr \\
-    --pheno plink_formated_trats.tsv
+          --threads 5 \\
+          --make-bed \\
+          --snps-only \\
+          --biallelic-only \\
+          --maf 0.05 \\
+          --set-missing-var-ids @:# \\
+          --extract plink.prune.in \\
+          --geno \\
+          --recode \\
+          --out ${TRAIT} \\
+          --allow-extra-chr \\
+          --pheno plink_formated_trats.tsv
 
     """
 }
 
 process gcta_grm {
 
-    machineType 'n1-standard-4'
+    machineType 'n1-highmem-4'
 
     input:
         tuple val(TRAIT), file(traits), file(bed), file(bim), file(fam), file(map), file(nosex), file(ped), file(log)
@@ -618,11 +620,31 @@ process gcta_grm {
 
     """
 
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm --out ${TRAIT}_gcta_grm --thread-num 5
-    gcta64 --bfile ${TRAIT} --autosome --maf 0.05 --make-grm-inbred --out ${TRAIT}_gcta_grm_inbred --thread-num 5
+    gcta64 --bfile ${TRAIT} \\
+           --autosome \\
+           --maf 0.05 \\
+           --make-grm \\
+           --out ${TRAIT}_gcta_grm \\
+           --thread-num 5
 
-    gcta64 --grm ${TRAIT}_gcta_grm --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability --thread-num 5
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --pheno plink_formated_trats.tsv --reml --out ${TRAIT}_heritability_inbred --thread-num 5
+    gcta64 --bfile ${TRAIT} \\
+           --autosome \\
+           --maf 0.05 \\
+           --make-grm-inbred \\
+           --out ${TRAIT}_gcta_grm_inbred \\
+           --thread-num 5
+
+    gcta64 --grm ${TRAIT}_gcta_grm \\
+           --pheno plink_formated_trats.tsv \\
+           --reml \\
+           --out ${TRAIT}_heritability \\
+           --thread-num 5
+
+    gcta64 --grm ${TRAIT}_gcta_grm_inbred \\
+           --pheno plink_formated_trats.tsv \\
+           --reml \\
+           --out ${TRAIT}_heritability_inbred \\
+           --thread-num 5
 
     """
 }
@@ -630,7 +652,7 @@ process gcta_grm {
 
 process gcta_lmm_exact_mapping {
 
-    machineType 'n1-standard-4'
+    machineType 'n1-highmem-4'
 
     publishDir "${params.out}/Mapping/Raw", pattern: "*fastGWA", overwrite: true
     publishDir "${params.out}/Mapping/Raw", pattern: "*loco.mlma", overwrite: true
@@ -649,23 +671,31 @@ process gcta_lmm_exact_mapping {
 
     """
 
-    gcta64 --grm ${TRAIT}_gcta_grm --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm --thread-num 5
-    gcta64 --mlma-loco \\
-        --thread-num 5 \\
-        --grm ${TRAIT}_sparse_grm \\
-        --bfile ${TRAIT} \\
-        --out ${TRAIT}_lmm-exact \\
-        --pheno ${traits} \\
-        --maf ${params.maf}
+    gcta64 --grm ${TRAIT}_gcta_grm \\
+           --make-bK-sparse ${params.sparse_cut} \\
+           --out ${TRAIT}_sparse_grm \\
+           --thread-num 5
 
-    gcta64 --grm ${TRAIT}_gcta_grm_inbred --make-bK-sparse ${params.sparse_cut} --out ${TRAIT}_sparse_grm_inbred --thread-num 5
+    gcta64 --mlma-loco \\
+           --grm ${TRAIT}_sparse_grm \\
+           --bfile ${TRAIT} \\
+           --out ${TRAIT}_lmm-exact \\
+           --pheno ${traits} \\
+           --maf ${params.maf} \\
+           --thread-num 5
+
+    gcta64 --grm ${TRAIT}_gcta_grm_inbred \\
+           --make-bK-sparse ${params.sparse_cut} \\
+           --out ${TRAIT}_sparse_grm_inbred \\
+           --thread-num 5
+
     gcta64 --fastGWA-lmm-exact \\
-        --thread-num 5 \\
-        --grm-sparse ${TRAIT}_sparse_grm \\
-        --bfile ${TRAIT} \\
-        --out ${TRAIT}_lmm-exact_inbred \\
-        --pheno ${traits} \\
-        --maf ${params.maf}
+           --grm-sparse ${TRAIT}_sparse_grm \\
+           --bfile ${TRAIT} \\
+           --out ${TRAIT}_lmm-exact_inbred \\
+           --pheno ${traits} \\
+           --maf ${params.maf} \\
+           --thread-num 5
 
     """
 }
@@ -872,36 +902,36 @@ process gcta_fine_maps {
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R
 
     for i in *ROI_Genotype_Matrix.tsv;
-        do
+      do
 
-        chr=`echo \$i | cut -f2 -d "." | cut -f1 -d ":"`
-        start=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f1 -d "-"`
-        stop=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f2 -d "-"`
+      chr=`echo \$i | cut -f2 -d "." | cut -f1 -d ":"`
+      start=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f1 -d "-"`
+      stop=`echo \$i | cut -f2 -d "." | cut -f2 -d ":" | cut -f2 -d "-"`
 
-        gcta64 --bfile ${TRAIT}.\$chr.\$start.\$stop \\
-        --autosome \\
-        --maf 0.05 \\
-        --make-grm-inbred \\
-        --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
-        --thread-num 9
+      gcta64 --bfile ${TRAIT}.\$chr.\$start.\$stop \\
+              --autosome \\
+              --maf 0.05 \\
+              --make-grm-inbred \\
+              --out ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
+              --thread-num 9
 
-        gcta64 --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
-        --make-bK-sparse ${params.sparse_cut} \\
-        --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred  \\
-        --thread-num 9
+      gcta64 --grm ${TRAIT}.\$chr.\$start.\$stop.FM_grm_inbred \\
+              --make-bK-sparse ${params.sparse_cut} \\
+              --out ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred  \\
+              --thread-num 9
 
-        gcta64 --fastGWA-lmm-exact \\
-        --grm-sparse ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred \\
-        --bfile ${TRAIT}.\$chr.\$start.\$stop  \\
-        --out ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred \\
-        --pheno plink_finemap_traits.tsv \\
-        --maf ${params.maf} \\
-        --thread-num 9
-        
-        Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
-        Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
+      gcta64 --fastGWA-lmm-exact \\
+              --grm-sparse ${TRAIT}.\$chr.\$start.\$stop.sparse_FM_grm_inbred \\
+              --bfile ${TRAIT}.\$chr.\$start.\$stop  \\
+              --out ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred \\
+              --pheno plink_finemap_traits.tsv \\
+              --maf ${params.maf} \\
+              --thread-num 9
+      
+      Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
+      Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
 
-        done
+    done
 
     """
 }
@@ -1438,7 +1468,7 @@ process sim_fine_maps {
 
 workflow.onComplete {
 
-    summary = '''
+    summary = """
 
     Pipeline execution summary
     ---------------------------
@@ -1470,7 +1500,7 @@ workflow.onComplete {
     Annotation                              = ${params.annotate}
     Result Directory                        = ${params.out}
 
-    '''
+    """
 
     println summary
 
