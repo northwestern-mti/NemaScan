@@ -257,7 +257,9 @@ workflow {
             .combine(divergent_and_haplotype.out.div_done)
             .join(gcta_fine_maps.out.finemap_done, by: 1, remainder: true)
             .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_main.Rmd"))
-            .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_region_template.Rmd")) | html_report_main
+            .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_region_template.Rmd"))
+            .combine(Channel.fromPath("${params.bin_dir}/render_markdown.R"))
+            .combine(Channel.fromPath("${params.out}/results/*")) | html_report_main
 
     } else if(params.annotate) {
 
@@ -775,6 +777,8 @@ process LD_between_regions {
 
 process prep_ld_files {
 
+    machineType 'n1-standard-4'
+
     tag {TRAIT}
 
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*ROI_Genotype_Matrix.tsv"
@@ -812,10 +816,11 @@ process prep_ld_files {
 
         bcftools view --regions \$chromosome:\$start_pos-\$end_pos ${imputed_vcf} \
         -S phenotyped_samples.txt |\\
-        bcftools filter -i N_MISSING=0 -Oz |\\
+        bcftools filter -i N_MISSING=0 -Oz --threads 5 |\\
         bcftools annotate --rename-chrs ${num_chroms} -o finemap.vcf.gz
 
         plink --vcf finemap.vcf.gz \\
+            --threads 5 \\
             --snps-only \\
             --maf 0.05 \\
             --biallelic-only \\
@@ -832,6 +837,7 @@ process prep_ld_files {
         chrom_num=`cat ${num_chroms} | grep -w \$chromosome | cut -f2 -d' '`
 
         plink --r2 with-freqs \\
+            --threads 5 \\
             --allow-extra-chr \\
             --snps-only \\
             --ld-window-r2 0 \\
@@ -866,7 +872,7 @@ process prep_ld_files {
 
 
 process gcta_fine_maps {
-    machineType 'n1-highmem-8'
+    machineType 'n2-highmem-8'
 
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*.fastGWA"
     publishDir "${params.out}/Fine_Mappings/Data", mode: 'copy', pattern: "*_genes.tsv"
@@ -972,7 +978,7 @@ process html_report_main {
 
 
   input:
-    tuple val(TRAIT), file("QTL_peaks.tsv"), file(pheno), val(div_done), file("genes.tsv"), file(ns_report_md), file(ns_report_template_md)
+    tuple val(TRAIT), file("QTL_peaks.tsv"), file(pheno), val(div_done), file("genes.tsv"), file(ns_report_md), file(ns_report_template_md), file(render_markdown), file(results_dir)
 
   output:
     tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html")
@@ -982,8 +988,7 @@ process html_report_main {
     cat ${ns_report_md} | sed "s/TRAIT_NAME_HOLDER/${TRAIT}/g" > NemaScan_Report_${TRAIT}_main.Rmd 
     cat ${ns_report_template_md} > NemaScan_Report_region_template_.Rmd 
 
-    # probably need to change root dir...
-    Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${params.out}/')"
+    Rscript --vanilla ${render_markdown} 'NemaScan_Report_${TRAIT}_main.Rmd'
 
   """
 }
@@ -1488,18 +1493,4 @@ workflow.onComplete {
 
     println summary
 
-    def outlog = new File("${params.out}/log.txt")
-    outlog.newWriter().withWriter {
-        outlog << param_summary
-        outlog << summary
-    }
 }
-
-    // mail summary
-    //if (params.email) {
-    //    ['mail', '-s', 'cegwas2-nf', params.email].execute() << summary
-    //}
-
-
-
-

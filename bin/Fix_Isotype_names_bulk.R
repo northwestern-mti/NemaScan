@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
-library(tidyverse)
-library(data.table)
+suppressWarnings(suppressPackageStartupMessages(library(tidyverse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 
 args <- commandArgs(trailingOnly = TRUE)
 
