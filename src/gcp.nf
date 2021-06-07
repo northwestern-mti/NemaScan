@@ -355,10 +355,7 @@ process update_annotations {
         tuple file("*canonical_geneset.gtf.gz"), file("c_${params.species}_${params.wbb}_refFlat.txt")
 
     """
-        # add R_libpath to .libPaths() into the R script, create a copy into the NF working directory 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${update_annotations} > update_annotations_.R
-
-        Rscript --vanilla update_annotations_.R ${params.wbb} ${params.species} ${gtf_to_refflat}
+        Rscript --vanilla ${update_annotations} ${params.wbb} ${params.species} ${gtf_to_refflat}
     """
 
 }   
@@ -397,9 +394,7 @@ process fix_strain_names_bulk {
         file("strain_issues.txt")
 
     """
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${fix_isotype_names_bulk} > Fix_Isotype_names_bulk_.R 
-
-        Rscript --vanilla Fix_Isotype_names_bulk_.R ${phenotypes} fix $isotype_lookup
+        Rscript --vanilla ${fix_isotype_names_bulk} ${phenotypes} fix $isotype_lookup
     """
 
 }
@@ -509,8 +504,7 @@ process chrom_eigen_variants {
         cat Genotype_Matrix.tsv |\\
         awk -v chrom="${CHROM}" '{if(\$1 == "CHROM" || \$1 == chrom) print}' > ${CHROM}_gm.tsv
 
-        echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${get_genomatrix_eigen} > Get_GenoMatrix_Eigen_.R
-        Rscript --vanilla Get_GenoMatrix_Eigen_.R ${CHROM}_gm.tsv ${CHROM}
+        Rscript --vanilla ${get_genomatrix_eigen} ${CHROM}_gm.tsv ${CHROM}
     """
 
 }
@@ -719,11 +713,9 @@ process gcta_intervals_maps {
         path "*AGGREGATE_qtl_region.tsv", emit: qtl_peaks
 
     """
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${aggregate_mappings} > Aggregate_Mappings_.R
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${find_aggregate_intervals_maps} > Find_Aggregate_Intervals_Maps_.R
 
-    Rscript --vanilla Aggregate_Mappings_.R ${lmmexact_loco} ${lmmexact_inbred}
-    Rscript --vanilla Find_Aggregate_Intervals_Maps_.R ${geno} ${pheno} temp.aggregate.mapping.tsv ${tests} ${qtl_grouping_size} ${qtl_ci_size} ${sig_thresh} ${TRAIT}_AGGREGATE
+    Rscript --vanilla ${aggregate_mappings} ${lmmexact_loco} ${lmmexact_inbred}
+    Rscript --vanilla ${find_aggregate_intervals_maps} ${geno} ${pheno} temp.aggregate.mapping.tsv ${tests} ${qtl_grouping_size} ${qtl_ci_size} ${sig_thresh} ${TRAIT}_AGGREGATE
 
     """
 }
@@ -744,9 +736,7 @@ process generate_plots {
         file("*.png")
 
     """
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${pipeline_plotting_mod} > pipeline.plotting.mod_.R
-    Rscript --vanilla pipeline.plotting.mod_.R ${aggregate_mapping} ${tests}
-
+    Rscript --vanilla  ${pipeline_plotting_mod} ${aggregate_mapping} ${tests}
     """
 }
 
@@ -763,8 +753,7 @@ process LD_between_regions {
         val TRAIT, emit: linkage_done
 
   """
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${ld_between_regions} > LD_between_regions_.R 
-    Rscript --vanilla LD_between_regions_.R ${geno} ${aggregate_mapping} ${TRAIT}
+    Rscript --vanilla ${ld_between_regions} ${geno} ${aggregate_mapping} ${TRAIT}
   """
 }
 
@@ -897,8 +886,6 @@ process gcta_fine_maps {
     """
 
     tail -n +2 ${pheno} | awk 'BEGIN {OFS="\\t"}; {print \$1, \$1, \$2}' > plink_finemap_traits.tsv
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${finemap_qtl_intervals} > Finemap_QTL_Intervals_.R
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" | cat - ${plot_genes} > plot_genes_.R
 
     for i in *ROI_Genotype_Matrix.tsv;
       do
@@ -927,8 +914,8 @@ process gcta_fine_maps {
               --maf ${params.maf} \\
               --thread-num 9
       
-      Rscript --vanilla Finemap_QTL_Intervals_.R  ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
-      Rscript --vanilla plot_genes_.R  ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
+      Rscript --vanilla ${finemap_qtl_intervals} ${TRAIT}.\$chr.\$start.\$stop.finemap_inbred.fastGWA \$i ${TRAIT}.\$chr.\$start.\$stop.LD.tsv
+      Rscript --vanilla ${plot_genes} ${TRAIT}.\$chr.\$start.\$stop.prLD_df.tsv ${pheno} ${genefile} ${annotation}
 
     done
 
@@ -994,8 +981,6 @@ process html_report_main {
   """
     cat ${ns_report_md} | sed "s/TRAIT_NAME_HOLDER/${TRAIT}/g" > NemaScan_Report_${TRAIT}_main.Rmd 
     cat ${ns_report_template_md} > NemaScan_Report_region_template_.Rmd 
-
-    echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" > .Rprofile
 
     # probably need to change root dir...
     Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${params.out}/')"
