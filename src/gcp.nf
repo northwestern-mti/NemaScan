@@ -495,8 +495,7 @@ process chrom_eigen_variants {
 
     tag { CHROM }
 
-    cpus 6
-    memory params.eigen_mem
+    machineType 'n1-highmem-2'
 
     input:
         tuple val(CHROM), file(genotypes), file(get_genomatrix_eigen)
@@ -976,10 +975,10 @@ process divergent_and_haplotype {
 process html_report_main {
 
   //executor 'local'
-  errorStrategy 'ignore'
+  //errorStrategy 'ignore'
 
   tag {TRAIT}
-  memory '16 GB'
+  machineType 'n1-highmem-2'
   
 
   publishDir "${params.out}/Reports", mode: 'copy'
@@ -999,7 +998,7 @@ process html_report_main {
     echo ".libPaths(c(\\"${params.R_libpath}\\", .libPaths() ))" > .Rprofile
 
     # probably need to change root dir...
-    Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${params.out}')"
+    Rscript -e "rmarkdown::render('NemaScan_Report_${TRAIT}_main.Rmd', knit_root_dir='${params.out}/')"
 
   """
 }
