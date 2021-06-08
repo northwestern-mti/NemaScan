@@ -259,7 +259,7 @@ workflow {
             .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_main.Rmd"))
             .combine(Channel.fromPath("${params.bin_dir}/NemaScan_Report_region_template.Rmd"))
             .combine(Channel.fromPath("${params.bin_dir}/render_markdown.R"))
-            .combine(Channel.fromPath("${params.out}/results/*")) | html_report_main
+            .combine(Channel.fromPath("${params.out}/results/**")) | html_report_main
 
     } else if(params.annotate) {
 
@@ -968,20 +968,19 @@ process divergent_and_haplotype {
 process html_report_main {
 
   //executor 'local'
-  //errorStrategy 'ignore'
+  tag {"${TRAIT} - HTML REPORT" }
 
-  tag {TRAIT}
   machineType 'n1-highmem-2'
-  
 
-  publishDir "${params.out}/Reports", mode: 'copy'
-
+  publishDir "${params.out}/Reports", pattern: "*.Rmd", overwrite: true
+  publishDir "${params.out}/Reports", pattern: "*.html", overwrite: true
 
   input:
     tuple val(TRAIT), file("QTL_peaks.tsv"), file(pheno), val(div_done), file("genes.tsv"), file(ns_report_md), file(ns_report_template_md), file(render_markdown), file(results_dir)
 
   output:
-    tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html")
+    tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html"),  
+    val true emit: html_report_done
 
 
   """
