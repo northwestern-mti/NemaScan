@@ -980,7 +980,7 @@ process html_report_main {
 
   output:
     tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html")
-    val true emit: html_report_done
+    val true, emit: html_report_done
 
 
   """
