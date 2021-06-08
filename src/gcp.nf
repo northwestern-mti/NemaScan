@@ -985,7 +985,7 @@ process html_report_main {
 
   input:
     tuple val(TRAIT), file(qtl_peaks), file(pheno), file(strain_issues), file(tests), file(geno), file(qtl_bins), file(qtl_div), \
-    file(haplotype_qtl), file(div_isotype), file(pmap), file(fastGWA), file(prLD), file(bcsq_genes), file(roi_geno), file(roi_ld) \
+    file(haplotype_qtl), file(div_isotype), file(pmap), file(fastGWA), file(prLD), file(bcsq_genes), file(roi_geno), file(roi_ld), \
     file(ns_report_md), file(ns_report_template_md), file(render_markdown)
 
   output:
