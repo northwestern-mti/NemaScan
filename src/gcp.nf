@@ -979,7 +979,7 @@ process html_report_main {
     tuple val(TRAIT), file("QTL_peaks.tsv"), file(pheno), val(div_done), file("genes.tsv"), file(ns_report_md), file(ns_report_template_md), file(render_markdown), file(results_dir)
 
   output:
-    tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html"),  
+    tuple file("NemaScan_Report_*.Rmd"), file("NemaScan_Report_*.html")
     val true emit: html_report_done
 
 
