@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
-library(tidyverse)
-library(data.table)
-library(RColorBrewer)
+suppressPackageStartupMessages(library(tidyverse))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressPackageStartupMessages(library(RColorBrewer))
 
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -49,7 +49,7 @@ pr_roi_ld <- ROI.LD %>%
   dplyr::left_join(finemap,., by = "SNP") %>%
   dplyr::left_join(.,roi_genotype)
 
-readr::write_tsv(pr_roi_ld, path = glue::glue("{save_name}.prLD_df.tsv"))
+readr::write_tsv(pr_roi_ld, file = glue::glue("{save_name}.prLD_df.tsv"))
 
 peak_roi_marker <- dplyr::filter(pr_roi_ld, POS == peakp)
 
