@@ -26,15 +26,10 @@ WORKDIR /nemascan
 RUN NXF_VER=21.05.0-edge NXF_MODE=google NXF_EDGE=1 \
     wget -qO- https://get.nextflow.io | bash
 
-COPY nemascan-nxf.sh /nemascan/nemascan-nxf.sh
-COPY nextflow.config /nemascan/nextflow.config
-COPY main.nf /nemascan/main.nf
-COPY conf/* /nemascan/conf/
-COPY bin/* /nemascan/bin/
-COPY modules/* /nemascan/modules/
+
+COPY . .
 
 
 # add nextflow and nemarun directory to te system path and make them executable
 ENV PATH="/nemascan:${PATH}"
 RUN chmod +x /nemascan/nemascan-nxf.sh /nemascan/nextflow
-
